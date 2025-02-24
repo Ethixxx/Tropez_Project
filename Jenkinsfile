@@ -38,4 +38,5 @@ pipeline {
         failure {
             echo 'The Jenkins run was unsuccessful :('
         }
+    }
 }
