@@ -15,14 +15,14 @@ class encryptionUtils(ABC):
     #returns (cypherText, salt) on success
     #returns None on fail
     @abstractmethod
-    def encrypt_with_auth(self, plainText, encryptedMasterKey):
+    def encrypt_with_auth(self, plainText: bytes, encryptedMasterKey: bytes):
         pass
     
     #decrypts and autheticates cypherText
     #returns plainText on success
     #returns None on fail
     @abstractmethod
-    def decrypt_with_auth(self, cypherText, salt, encryptedMasterKey):
+    def decrypt_with_auth(self, cypherText: bytes, salt: bytes, encryptedMasterKey: bytes):
         pass
     
     #returns an encrypted master key that works with the cypher method
