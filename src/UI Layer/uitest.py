@@ -4,7 +4,7 @@ import ctypes
 
 import threading
 import darkdetect #for system dark/light mode detection
-import sv_ttk #windows 11 like theme
+import sv_ttk #windows 11 look-alike theme
 
 # Enable DPI awareness for better scaling on Windows
 try:
@@ -23,47 +23,7 @@ class App(tk.Tk):
         
         self.initialize_sidebar()
 
-        # Minimum size to hold all buttons in the sidebar
-        sidebar_width = 150
-        button_height = 40
-        padding = 10
-        num_buttons = 2  # Only counting the top buttons now
-        min_height = (button_height + padding) * num_buttons + padding
-        self.minsize(sidebar_width + 200, min_height)
-
-        # Sidebar Frame
-        self.sidebar = tk.Frame(self, width=sidebar_width, height=min_height)
-        self.sidebar.pack(side="left", fill="y")
-
-        # Shadow Frame (simulates a shadow effect)
-        self.shadow = tk.Frame(self, width=4, bg="#bdc3c7")  # Light gray for shadow effect
-        self.shadow.pack(side="left", fill="y")
-
-        # Sidebar Buttons (Top Buttons)
-        self.btn1 = ttk.Button(self.sidebar, text="Button 1",
-                               style="TButton",
-                               takefocus=False,
-                               command=lambda: self.show_message("Button 1 clicked"))
-        self.btn1.pack(pady=(padding, 0), fill="x", padx=5)
-
-        # Separator Below Button 1
-        ttk.Separator(self.sidebar, orient="horizontal").pack(fill="x", pady=(5, 5))
-
-        self.btn2 = ttk.Button(self.sidebar, text="Button 2",
-                               style="TButton",
-                               takefocus=False,
-                               command=lambda: self.show_message("Button 2 clicked"))
-        self.btn2.pack(pady=(0, 0), fill="x", padx=5)
-
-        # Separator Below Button 2
-        ttk.Separator(self.sidebar, orient="horizontal").pack(fill="x", pady=(5, 5))
-
-        # Button Snapped to Bottom with Gear Emoji
-        self.btn3 = ttk.Button(self.sidebar, text="⚙️",
-                               style="TButton",
-                               takefocus=False,
-                               command=lambda: self.show_message("Settings clicked"))
-        self.btn3.pack(side="bottom", pady=padding, fill="x", padx=5)
+        self.minsize(self.winfo_pixels('300p'), self.winfo_pixels('300p'))
 
         # Main Content Area
         self.content = tk.Frame(self)
@@ -94,9 +54,44 @@ class App(tk.Tk):
         self.darkModeListener.start()
         
     def initialize_sidebar(self):
-        sidebar_width = int(self.winfo_fpixels('70p')) #sidebar width is 70 "points" -> 70 * 1/72 inch
-        button_height = int(self.winfo_fpixels('40p')) #button height is 40 points
-        button_padding = int(self.winfo_fpixels('10p')) #distance between pixels
+        sidebar_width = '40p' #sidebar width is 70 "points" -> 70 * 1/72 inch
+        button_height = '40p' #button height is 40 points
+        button_padding = '10p' #distance between buttons
+        print(sidebar_width)
+        
+        # Sidebar Frame
+        self.sidebar = ttk.Frame(self, width=sidebar_width)
+        self.sidebar.pack(side="left", fill="y")
+        
+        # Shadow Frame (simulates a shadow effect)
+        self.shadow = tk.Frame(self, width='1p', background="gray")
+        self.shadow.pack(side="left", fill="y")
+        
+        # Sidebar Buttons (Top Buttons)
+        self.btn1 = ttk.Button(self.sidebar, image=tk.PhotoImage(file="C:/Users/Brend/Documents/GitHub/Tropez_Project/src/UI Layer/Icons/folders-svgrepo-com.svg"),
+                               takefocus=False,
+                               command=lambda: self.show_message("Button 1 clicked"), width=sidebar_width)
+        self.btn1.pack(pady=(button_padding, 0), fill="x")
+        
+        # Separator Below Button 1
+        ttk.Separator(self.sidebar, orient="horizontal").pack(fill="x", pady=(5, 5))
+
+        self.btn2 = ttk.Button(self.sidebar, text="Button 2",
+                               takefocus=False,
+                               command=lambda: self.show_message("Button 2 clicked"), width=sidebar_width)
+        self.btn2.pack(pady=(0, 0), fill="x", padx=5)
+
+        # Separator Below Button 2
+        ttk.Separator(self.sidebar, orient="horizontal").pack(fill="x", pady=(5, 5))
+
+        # Button Snapped to Bottom with Gear Emoji
+        self.btn3 = ttk.Button(self.sidebar, text="⚙️",
+                               style="TButton",
+                               takefocus=False,
+                               command=lambda: self.show_message("Settings clicked"), width=sidebar_width)
+        self.btn3.pack(side="bottom", pady=button_padding, fill="x", padx=5)
+        
+        
         
         
     
