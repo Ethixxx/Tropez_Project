@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <clipPath id="clip-notebook">
+      <rect width="32" height="32"/>
+    </clipPath>
+  </defs>
+  <g id="notebook" clip-path="url(#clip-notebook)">
+    <g id="Group_3045" data-name="Group 3045" transform="translate(-208 -156)">
+      <g id="Group_3044" data-name="Group 3044">
+        <g id="Group_3043" data-name="Group 3043">
+          <path id="Path_3972" data-name="Path 3972" d="M235.812,158.252h-4.25v-.689a.5.5,0,0,0-1,0v.689h-16a1,1,0,0,0-1,1v3.123h-1.375a1,1,0,0,0,0,2h1.375v2.313h-1.375a1,1,0,0,0,0,2h1.375V171h-1.375a1,1,0,0,0,0,2h1.375v2.313h-1.375a1,1,0,0,0,0,2h1.375v2.312h-1.375a1,1,0,0,0,0,2h1.375v3.123a1,1,0,0,0,1,1h16v.69a.5.5,0,0,0,1,0v-.69h4.25a1,1,0,0,0,1-1v-25.5A1,1,0,0,0,235.812,158.252Zm-20.25,25.5v-2.123h1.125a1,1,0,1,0,0-2h-1.125v-2.312h1.125a1,1,0,0,0,0-2h-1.125V173h1.125a1,1,0,1,0,0-2h-1.125v-2.312h1.125a1,1,0,0,0,0-2h-1.125v-2.313h1.125a1,1,0,1,0,0-2h-1.125v-2.123h15v23.5Zm19.25,0h-3.25v-23.5h3.25Z" fill="#344952"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
