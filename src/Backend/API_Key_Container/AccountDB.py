@@ -2,14 +2,14 @@ from sqlalchemy import create_engine, Column, String, LargeBinary, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from encryptionUtils import AESGCMSIVInterface
+from Backend.API_Key_Container.encryptionUtils import AESGCMSIVInterface
 
 Base = declarative_base()
 
 class APIKey(Base):
     __tablename__ = 'api_keys'
     id = Column(Integer, primary_key=True, autoincrement=True, unique=True) #unique identifier per api key
-    name = Column(String, primary_key=True, nullable=False, unique=True) #user inputed name for this api key
+    name = Column(String, nullable=False, unique=True) #user inputed name for this api key
     service = Column(String, nullable=False) #service name for use in the request type lookup table
     encrypted_key = Column(LargeBinary, nullable=False)
     salt = Column(LargeBinary, nullable=False)
