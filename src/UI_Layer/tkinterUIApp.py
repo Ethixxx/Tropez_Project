@@ -12,11 +12,14 @@ try:
 except Exception as e:
     print(f"Failed to set DPI awareness: {e}")
 
-# Import APIKeyManager from the appropriate module
+
+from Backend.API_Connector import requestors
 from Backend.API_Key_Container.AccountDB import APIKeyManager
     
     
 class MainApp():
+    supported_services = {'Google Drive': requestors.GoogleDriveRequestor()}
+    
     def __init__(self, screenName: str = 'Tropez'):
         self.initialize_main_window(screenName)
         self.initialize_main_pages()
@@ -123,7 +126,7 @@ class MainApp():
             super().__init__(parent)
 
             # New button
-            self.new_account_button = ttk.Button(self, text="New", takefocus=False)
+            self.new_account_button = ttk.Button(self, text="New", takefocus=False, function=self.add_new_key)
             self.new_account_button.grid(row=0, column=0, sticky="nswe", padx='10p')
             self.grid_columnconfigure(index=0, minsize='10p')
 
@@ -139,7 +142,7 @@ class MainApp():
             self.search_box.bind('<FocusOut>', lambda event: (self.search_box.insert(0, self.PLACEHOLDER), self.search_box.configure(foreground='gray')) if not self.search_box.get() else None)
             self.search_box.bind('<FocusIn>', lambda event: (self.search_box.delete(0, 'end'), self.search_box.configure(foreground='black')) if self.search_box.get() == self.PLACEHOLDER else None)
 
-            # Sort By combobox
+            # "Sort By" combobox
             self.sort_by_box = ttk.Combobox(self, takefocus=False, state='readonly', width=20)
             self.sort_by_box['values'] = ('Name', 'Service')
             self.sort_by_box.bind("<<ComboboxSelected>>", lambda event: self.load_accounts())
@@ -186,6 +189,44 @@ class MainApp():
             for key in all_keys:
                 service = self.manager.retrieve_api_key_by_id(key[0])[0]
                 self.tree.insert("", "end", values=(key[0], key[1], service))
+        
+        def add_new_key(self):
+            #if already adding a new key, return
+            if hasattr(self, 'new_key_window') and self.new_key_window.winfo_exists():
+                self.new_key_window.grab_set()
+                self.new_key_window.focus_set()
+                return
+            
+            #create a pop up box
+            self.new_key_window = tk.Toplevel(self)
+            self.new_key_window.title("Add New API Key")
+            self.new_key_window.geometry("300x200")
+            
+            #box can not be resized
+            self.new_key_window.resizable(width=0, height=0)
+            
+            #box gets focus
+            self.new_key_window.grab_set()
+            self.new_key_window.focus_set()
+            
+            #user added name
+            name_label = ttk.Label(self.new_key_window, text="Name:")
+            name_label.grid(row=0, column=0, padx='10p', pady='10p')
+            
+            name_entry = ttk.Entry(self.new_key_window, takefocus=False)
+            name_entry.grid(row=0, column=1, padx='10p', pady='10p')
+            
+            #services dropdown box
+            service_label = ttk.Label(self.new_key_window, text="Service:")
+            service_label.grid(row=1, column=0, padx='10p', pady='10p')
+            
+            service_entry = ttk.Combobox(self.new_key_window, takefocus=False)
+            service_entry.grid(row=1, column=1, padx='10p', pady='10p')
+            service_entry['values'] = self.supported_services
+            service_entry.current(0)
+            
+            #
+            
             
         def deselect(self):
             self.focus_set()

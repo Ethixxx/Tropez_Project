@@ -123,6 +123,7 @@ class APIKeyManager:
             if decrypted_key[1]:
                 return decrypted_key
         session.close()
+        return None
         
     #this method is used to find and decrypt an api key entry from its name for use in upper levels
     def retrieve_api_key_by_name(self, name):
@@ -135,7 +136,8 @@ class APIKeyManager:
             if decrypted_key[1]:
                 return decrypted_key
         session.close()
-
+        return None
+    
 # Example usage:
 if __name__ == "__main__":
 

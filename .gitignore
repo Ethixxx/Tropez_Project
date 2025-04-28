@@ -15,3 +15,6 @@
 **/.venv/
 **/env/
 **/venv/
+
+# ignore the api secrets :D
+**/client_secret.txt
