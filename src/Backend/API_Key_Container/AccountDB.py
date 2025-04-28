@@ -2,14 +2,14 @@ from sqlalchemy import create_engine, Column, String, LargeBinary, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from encryptionUtils import AESGCMSIVInterface
+from Backend.API_Key_Container.encryptionUtils import AESGCMSIVInterface
 
 Base = declarative_base()
 
 class APIKey(Base):
     __tablename__ = 'api_keys'
     id = Column(Integer, primary_key=True, autoincrement=True, unique=True) #unique identifier per api key
-    name = Column(String, primary_key=True, nullable=False, unique=True) #user inputed name for this api key
+    name = Column(String, nullable=False, unique=True) #user inputed name for this api key
     service = Column(String, nullable=False) #service name for use in the request type lookup table
     encrypted_key = Column(LargeBinary, nullable=False)
     salt = Column(LargeBinary, nullable=False)
@@ -123,6 +123,7 @@ class APIKeyManager:
             if decrypted_key[1]:
                 return decrypted_key
         session.close()
+        return None
         
     #this method is used to find and decrypt an api key entry from its name for use in upper levels
     def retrieve_api_key_by_name(self, name):
@@ -135,7 +136,8 @@ class APIKeyManager:
             if decrypted_key[1]:
                 return decrypted_key
         session.close()
-
+        return None
+    
 # Example usage:
 if __name__ == "__main__":
 

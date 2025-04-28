@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <clipPath id="clip-key">
+      <rect width="32" height="32"/>
+    </clipPath>
+  </defs>
+  <g id="key" clip-path="url(#clip-key)">
+    <g id="Group_2661" data-name="Group 2661" transform="translate(-260 -208)">
+      <g id="Group_2656" data-name="Group 2656">
+        <g id="Group_2651" data-name="Group 2651">
+          <g id="Group_2650" data-name="Group 2650">
+            <g id="Group_2649" data-name="Group 2649">
+              <g id="Group_2648" data-name="Group 2648">
+                <path id="Path_3901" data-name="Path 3901" d="M289.259,223.823a9.184,9.184,0,0,1-9.605,2.18l-2.506,2.5-.248,3.456a1,1,0,0,1-.926.925l-2.963.213-.214,2.964a1,1,0,0,1-.925.926l-3.455.248-2.431,2.431a1,1,0,0,1-.915.271l-3.5-.743a1,1,0,0,1-.771-.771l-.743-3.5a1,1,0,0,1,.271-.915L274,220.346a9.247,9.247,0,1,1,15.262,3.477Zm-13.789,3.535,3.233-3.232a1,1,0,0,1,1.108-.21,7.25,7.25,0,1,0-3.727-3.727,1,1,0,0,1-.21,1.108l-13.747,13.747.26,1.218h0l.236,1.115,2.333.5,2.31-2.311a1,1,0,0,1,.635-.29l2.964-.213.214-2.964a1,1,0,0,1,.925-.925l2.963-.214.213-2.963A1,1,0,0,1,275.47,227.358Z" fill="#344952"/>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g id="Group_2655" data-name="Group 2655">
+          <g id="Group_2654" data-name="Group 2654">
+            <g id="Group_2653" data-name="Group 2653">
+              <g id="Group_2652" data-name="Group 2652">
+                <path id="Path_3902" data-name="Path 3902" d="M286.814,217.428c-.867.867-2.478.615-3.668-.574s-1.441-2.8-.574-3.668,2.478-.616,3.668.574S287.682,216.561,286.814,217.428Zm-3.535-3.535c-.448.447-.179,1.5.574,2.254s1.807,1.022,2.254.574.192-1.487-.574-2.254S283.734,213.438,283.279,213.893Z" fill="#344952"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g id="Group_2660" data-name="Group 2660">
+        <g id="Group_2659" data-name="Group 2659">
+          <g id="Group_2658" data-name="Group 2658">
+            <g id="Group_2657" data-name="Group 2657">
+              <path id="Path_3903" data-name="Path 3903" d="M274.455,226.253l-9.9,9.9a.5.5,0,0,1-.707-.707l9.9-9.9a.5.5,0,0,1,.708.708Z" fill="#344952"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
