@@ -18,8 +18,6 @@ from Backend.API_Key_Container.AccountDB import APIKeyManager
     
     
 class MainApp():
-    supported_services = {'Google Drive': requestors.GoogleDriveRequestor()}
-    
     def __init__(self, screenName: str = 'Tropez'):
         self.initialize_main_window(screenName)
         self.initialize_main_pages()
@@ -122,11 +120,12 @@ class MainApp():
             pass
             
     class accounts_page_base(tk.Frame):
+        supported_services = {'Google Drive': requestors.GoogleDriveRequestor()}
         def __init__(self, parent):
             super().__init__(parent)
 
             # New button
-            self.new_account_button = ttk.Button(self, text="New", takefocus=False, function=self.add_new_key)
+            self.new_account_button = ttk.Button(self, text="New", takefocus=False, command=self.add_new_key)
             self.new_account_button.grid(row=0, column=0, sticky="nswe", padx='10p')
             self.grid_columnconfigure(index=0, minsize='10p')
 
@@ -191,16 +190,10 @@ class MainApp():
                 self.tree.insert("", "end", values=(key[0], key[1], service))
         
         def add_new_key(self):
-            #if already adding a new key, return
-            if hasattr(self, 'new_key_window') and self.new_key_window.winfo_exists():
-                self.new_key_window.grab_set()
-                self.new_key_window.focus_set()
-                return
-            
             #create a pop up box
             self.new_key_window = tk.Toplevel(self)
             self.new_key_window.title("Add New API Key")
-            self.new_key_window.geometry("300x200")
+            self.new_key_window.geometry("500x200")
             
             #box can not be resized
             self.new_key_window.resizable(width=0, height=0)
@@ -220,12 +213,41 @@ class MainApp():
             service_label = ttk.Label(self.new_key_window, text="Service:")
             service_label.grid(row=1, column=0, padx='10p', pady='10p')
             
-            service_entry = ttk.Combobox(self.new_key_window, takefocus=False)
+            service_entry = ttk.Combobox(self.new_key_window, takefocus=False, state="readonly")
             service_entry.grid(row=1, column=1, padx='10p', pady='10p')
-            service_entry['values'] = self.supported_services
+            service_entry['values'] = list(self.supported_services.keys())
             service_entry.current(0)
             
-            #
+            #start and cancel button
+            start_button = ttk.Button(self.new_key_window, text="Start", takefocus=False, command=lambda: self.start_new_key(name_entry.get(), service_entry.get()))
+            start_button.grid(row=2, column=0, padx='10p', pady='10p')
+            
+            cancel_button = ttk.Button(self.new_key_window, text="Cancel", takefocus=False, command=self.new_key_window.destroy)
+            cancel_button.grid(row=2, column=1, padx='10p', pady='10p')
+            
+            
+        def start_new_key(self, name, service):
+            #if the name is empty, return
+            if not name.strip():
+                #highlight the name box in red
+                name_entry = self.new_key_window.children['!entry']
+                name_entry.configure(foreground='red')
+                name_entry.focus_set()
+                return
+        
+            #create a new key for the service and store it in the database
+            try:
+                self.supported_services[service].get_token(name, self.manager)
+            except ValueError as e:
+                #if the key already exists, highlight the name box in red
+                name_entry = self.new_key_window.children['!entry']
+                name_entry.configure(foreground='red')
+                name_entry.focus_set()
+                return
+            
+            #close the window and reload the accounts page
+            self.new_key_window.destroy()
+            self.load_accounts()
             
             
         def deselect(self):
