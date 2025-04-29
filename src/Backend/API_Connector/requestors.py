@@ -16,7 +16,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 #allow the oauth library to use http (subclassed to only allow localhost to use http)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-redirect_uri = r'http://localhost:8443/'
+redirect_uri = r"http://localhost:8443/"
 class SafeOAuth2Session(OAuth2Session):
     def request(self, method, url, *args, **kwargs):
         parsed = urlparse(url)
@@ -43,9 +43,8 @@ class OAuthHandler(BaseHTTPRequestHandler):
     
 #local http server to capture the authorization response
 def start_local_server():
-    server = HTTPServer(('localhost', 8443), OAuthHandler())
+    server = HTTPServer(('localhost', 8443), OAuthHandler)
     server.handle_request()  # handle a single request and exit
-    server.server_close()
 
 #main interface for a class that uses OAuth 2.0 to authenticate with a service and make requests for files
 class APIRequestor(ABC):
@@ -54,9 +53,10 @@ class APIRequestor(ABC):
         
     #this method is used to authenticate with the service and get an access token
     @abstractmethod
-    def authenticate(self, name: str, API_db_manager: AccountDB.APIKeyManager):
+    def get_token(self, name: str, API_db_manager: AccountDB.APIKeyManager):
         pass
     
+    @abstractmethod
     def load_token_with_name(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
         pass
     
@@ -78,16 +78,17 @@ class GoogleDriveRequestor(APIRequestor):
     def load_token_with_name(self, key_name, API_db_manager):
         #this method loads the token from the database and returns it
         #it returns None if the token is not found or if it is expired
-        service, token_data = API_db_manager.retrieve_api_key_by_name(key_name)
+        API_key = API_db_manager.retrieve_api_key_by_name(key_name)
         
-        if token_data is None:
+        if API_key is None:
             return None
         
-        if service != "Google Drive":
+        if API_key[0] != "Google Drive":
             raise ValueError("Key already exists, but is not for Google Drive")
         
         #retrieve the token from the data
-        token = pickle.loads(token_data)
+        token = pickle.loads(API_key[1])
+        return token
         
         
     #this method is used to authenticate with the service and get an access token
@@ -108,13 +109,18 @@ class GoogleDriveRequestor(APIRequestor):
             access_type="offline",
             prompt="consent")
         
+        global authorization_response
+        authorization_response = None
+        
         server_thread = threading.Thread(target=start_local_server)
         server_thread.start()
         
         #open the webbrowser for the user to authenticate
         webbrowser.open(authorization_url)
         
-        server_thread.join()
+        server_thread.join(30)
+        if(authorization_response is None):
+            raise ValueError("Authorization response not received. Please try again.")
         
         full_redirect_uri = redirect_uri[:-1] + authorization_response
         token = googleOAuth.fetch_token(
