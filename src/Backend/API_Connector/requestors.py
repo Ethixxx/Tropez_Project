@@ -133,3 +133,67 @@ class GoogleDriveRequestor(APIRequestor):
         
         #save the key
         API_db_manager.store_api_key(key_name, "Google Drive", pickle.dumps(token))
+
+class oneDriveRequestor(APIRequestor):
+    def __init__(self):
+        super().__init__()
+        self.client_ID = r"50d8f110-4943-4b84-a680-d4cb5040b262"
+        self.scope = [r"https://graph.microsoft.com/Files.Read", "offline_access"]
+        self.base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+        self.token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
+        
+        self.client_secret = None
+        secret_path = Path(__file__).resolve().parent.parent.parent / "Backend" / "API_Connector" / 'onedrive_client_secret.txt'
+        with open(secret_path, 'r') as f:
+            self.client_secret = f.read().strip()
+
+    def load_token_with_name(self, key_name, API_db_manager):
+        API_key = API_db_manager.retrieve_api_key_by_name(key_name)
+        
+        if API_key is None:
+            return None
+        
+        if API_key[0] != "OneDrive":
+            raise ValueError("Key already exists, but is not for OneDrive")
+        
+        token = pickle.loads(API_key[1])
+        return token
+    
+    def get_token(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
+        token = self.load_token_with_name(key_name, API_db_manager)
+        if token:
+            return
+
+        oneDriveOAuth = SafeOAuth2Session(
+            client_id=self.client_ID,
+            redirect_uri=redirect_uri,
+            scope=self.scope
+        )
+
+        authorization_url, state = oneDriveOAuth.authorization_url(
+            self.base_authorization_url,
+            access_type="offline",
+            prompt="consent")
+        
+        global authorization_response
+        authorization_response = None
+
+        server_thread = threading.Thread(target=start_local_server)
+        server_thread.start()
+        webbrowser.open(authorization_url)
+        server_thread.join(30)
+
+        if authorization_response is None:
+            raise ValueError("Authorization response not received. Please try again.")
+
+        full_redirect_uri = redirect_uri[:-1] + authorization_response
+
+        token = oneDriveOAuth.fetch_token(
+            self.token_url,
+            authorization_response=full_redirect_uri,
+            client_id=self.client_ID,
+            include_client_id=True,
+            client_secret=self.client_secret
+        )
+
+        API_db_manager.store_api_key(key_name, "OneDrive", pickle.dumps(token))
