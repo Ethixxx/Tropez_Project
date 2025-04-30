@@ -236,18 +236,20 @@ class MainApp():
                 return
         
             #create a new key for the service and store it in the database
-            try:
+            self.supported_services[service].get_token(name, self.manager)
+            '''try:
                 self.supported_services[service].get_token(name, self.manager)
             except ValueError as e:
                 #if the key already exists, highlight the name box in red
+                print(e.with_traceback)
                 name_entry = self.new_key_window.children['!entry']
                 name_entry.configure(foreground='red')
                 name_entry.focus_set()
-                return
+                return'''
             
             #close the window and reload the accounts page
-            self.new_key_window.destroy()
             self.load_accounts()
+            self.new_key_window.destroy()
             
             
         def deselect(self):

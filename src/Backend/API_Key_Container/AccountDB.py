@@ -10,6 +10,7 @@ class APIKey(Base):
     __tablename__ = 'api_keys'
     id = Column(Integer, primary_key=True, autoincrement=True, unique=True) #unique identifier per api key
     name = Column(String, nullable=False, unique=True) #user inputed name for this api key
+    account = Column(String, nullable=False, unique=True) #identifier for the account this key belongs to
     service = Column(String, nullable=False) #service name for use in the request type lookup table
     encrypted_key = Column(LargeBinary, nullable=False)
     salt = Column(LargeBinary, nullable=False)
@@ -43,7 +44,7 @@ class APIKeyManager:
         session.close()
 
     #this method is used to securely encrypt and store new api keys
-    def store_api_key(self, name, service, api_key):
+    def store_api_key(self, name, account, service, api_key):
         encrypted_data = self.encryptor.encrypt_with_auth(api_key, self.master_key)
         if encrypted_data:
             session = self.Session()
@@ -51,7 +52,7 @@ class APIKeyManager:
             #detect if name is not new
             existing_key = session.query(APIKey).filter_by(name=name).first()
             if not existing_key:
-                new_key = APIKey(name=name, service=service, encrypted_key=encrypted_data[0], salt=encrypted_data[1])
+                new_key = APIKey(name=name, service=service, account=account, encrypted_key=encrypted_data[0], salt=encrypted_data[1])
                 session.add(new_key)
                 session.commit()
                 session.close()
@@ -135,6 +136,14 @@ class APIKeyManager:
             decrypted_key = (key_entry.service,self.encryptor.decrypt_with_auth(encrypted_key, salt, self.master_key))
             if decrypted_key[1]:
                 return decrypted_key
+        session.close()
+        return None
+    
+    def retrieve_id_with_account_and_service(self, account, service):
+        session = self.Session()
+        key_entry = session.query(APIKey).filter_by(account=account, service=service).first()
+        if key_entry:
+            return key_entry.id
         session.close()
         return None
     

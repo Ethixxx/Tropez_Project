@@ -9,6 +9,7 @@ from requests_oauthlib import OAuth2Session
 import webbrowser
 from urllib.parse import urlparse
 import os
+from jwt import JWT
 
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -30,6 +31,7 @@ class SafeOAuth2Session(OAuth2Session):
 
 #handler for OAuth Callbacks
 authorization_response = None
+server_started = threading.Event()
 class OAuthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global authorization_response
@@ -38,13 +40,23 @@ class OAuthHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"Authorization successful. You can close this window.")
-        print("Authorization response received.") 
+        self.wfile.write("""<html><head><title>Authorization</title><script>window.onload = function() {window.open('', '_self'); window.close();};</script></head><body><p>Authorization successful. You can close this window.</p></body></html>""".encode("utf-8"))
     
 #local http server to capture the authorization response
 def start_local_server():
-    server = HTTPServer(('localhost', 8443), OAuthHandler)
-    server.handle_request()  # handle a single request and exit
+    global redirect_uri
+    global server_started
+    for port in range (8443, 8500):
+        try:
+            server = HTTPServer(('localhost', port), OAuthHandler)
+        except OSError as e:
+            continue
+        
+        server_started.set()
+        redirect_uri = f"http://localhost:{port}/"
+        server.handle_request()  # handle a single request and exit
+        break
+        
 
 #main interface for a class that uses OAuth 2.0 to authenticate with a service and make requests for files
 class APIRequestor(ABC):
@@ -66,14 +78,16 @@ class GoogleDriveRequestor(APIRequestor):
     def __init__(self):
         super().__init__()
         self.client_ID = r"390769709576-9ge3uljai3a9fpm7lmhhkdm4rcafaoq3.apps.googleusercontent.com"
-        self.scope = [r'https://www.googleapis.com/auth/drive.readonly']
+        self.scope = [r'https://www.googleapis.com/auth/drive.readonly', r'openid']
         self.base_authorization_url = r'https://accounts.google.com/o/oauth2/v2/auth'
         self.token_url = r'https://oauth2.googleapis.com/token'
         
-        self.client_secret = None
-        secret_path = Path(__file__).resolve().parent.parent.parent / "Backend" / "API_Connector" /'client_secret.txt'
-        with open(secret_path, 'r') as f:
-            self.client_secret = f.read().strip()
+        '''Note that it is known to be impossible to authenticate native desktop clients without an external trusted server.
+            For this reason, the OAUTH2.0 specification recomends that services do not require desktop clients to authenticate using a secret.
+            However, Google didn't read that and require a secret anyways.  
+            Hopefully they at least treat the secret as public information on their end as well :)'''
+        #if this was a production application, maybe we'd spin up an external server to handle client auth without leaking the secret
+        self.client_secret = r"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" 
         
     def load_token_with_name(self, key_name, API_db_manager):
         #this method loads the token from the database and returns it
@@ -84,7 +98,7 @@ class GoogleDriveRequestor(APIRequestor):
             return None
         
         if API_key[0] != "Google Drive":
-            raise ValueError("Key already exists, but is not for Google Drive")
+            raise ValueError("Key exists, but is not for Google Drive")
         
         #retrieve the token from the data
         token = pickle.loads(API_key[1])
@@ -95,8 +109,13 @@ class GoogleDriveRequestor(APIRequestor):
     def get_token(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
         token = self.load_token_with_name(key_name, API_db_manager)
         if token: #don't create a new token if it already exists
-            return
+            raise ValueError("Token already exists")
         
+        #start the local server to capture the authorization response
+        server_thread = threading.Thread(target=start_local_server)
+        server_thread.start()
+        
+        server_started.wait(5)
         
         googleOAuth = SafeOAuth2Session(
             client_id=self.client_ID,
@@ -104,16 +123,14 @@ class GoogleDriveRequestor(APIRequestor):
             scope=self.scope,
         )
         
-        authorization_url, state = googleOAuth.authorization_url(
+        authorization_url, __ = googleOAuth.authorization_url(
             self.base_authorization_url,
             access_type="offline",
             prompt="consent")
         
         global authorization_response
         authorization_response = None
-        
-        server_thread = threading.Thread(target=start_local_server)
-        server_thread.start()
+                
         
         #open the webbrowser for the user to authenticate
         webbrowser.open(authorization_url)
@@ -131,8 +148,20 @@ class GoogleDriveRequestor(APIRequestor):
             client_secret=self.client_secret
         )
         
-        #save the key
-        API_db_manager.store_api_key(key_name, "Google Drive", pickle.dumps(token))
+        authorization_response = None
+        
+        #get the user's unique account id
+        account_id = JWT().decode(message=token.get("id_token"), do_verify=False).get("sub")
+        
+        #check if the user already has a key associated with their account
+        existing_key = API_db_manager.retrieve_id_with_account_and_service(account_id, "Google Drive")
+        if existing_key:
+            #if the key already exists, update it
+            API_db_manager.change_api_key(existing_key, pickle.dumps(token))
+            API_db_manager.rename_api_key(existing_key, key_name)
+        else:
+            #if the key does not exist, create it
+            API_db_manager.store_api_key(key_name, account_id, "Google Drive", pickle.dumps(token))
 
 class oneDriveRequestor(APIRequestor):
     def __init__(self):
@@ -180,7 +209,9 @@ class oneDriveRequestor(APIRequestor):
 
         server_thread = threading.Thread(target=start_local_server)
         server_thread.start()
+        
         webbrowser.open(authorization_url)
+        
         server_thread.join(30)
 
         if authorization_response is None:
