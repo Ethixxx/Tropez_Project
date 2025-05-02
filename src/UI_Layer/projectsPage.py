@@ -45,6 +45,9 @@ class projects_page_base(tk.Frame):
             self.tree.heading("Status", text="Status")
             self.tree.grid(row=1, column=0, columnspan=3, sticky="nswe", padx='10p', pady='10p')
             self.grid_rowconfigure(1, weight=1)
+
+            self.delete_button = ttk.Button(self, text="Delete Project", command=self.delete_project)
+            self.delete_button.grid(row=2, column=1, sticky="nswe", padx='10p', pady='5p')
             
             self.load_projects()
             
@@ -123,3 +126,42 @@ class projects_page_base(tk.Frame):
         
         def deselect(self):
             self.focus_set()
+
+        
+        def get_selected_project_id(self):
+            selected_item = self.tree.focus()
+            if not selected_item:
+                return None
+
+            project_values = self.tree.item(selected_item, 'values')
+            if not project_values:
+                return None
+
+            return int(project_values[0])  # project ID
+        
+
+        def select_project(self):
+            project_id = self.get_selected_project_id()
+            if project_id is None:
+                print("No project selected.")
+                return
+
+            try:
+                root_folder = self.fileManager.get_project_root(project_id)
+                print(f"Selected Project ID: {project_id}, Root Folder ID: {root_folder.id}")
+                # Placeholder for future navigation logic
+            except Exception as e:
+                print(f"Error selecting project: {e}")
+
+
+        def delete_project(self):
+            project_id = self.get_selected_project_id()
+            if project_id is None:
+                print("No project selected to delete.")
+                return
+
+            try:
+                self.fileManager.delete_project(project_id)
+                self.load_projects()
+            except Exception as e:
+                print(f"Error deleting project: {e}")
