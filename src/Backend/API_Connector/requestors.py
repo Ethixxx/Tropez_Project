@@ -74,22 +74,9 @@ class APIRequestor(ABC):
     
     
 #google drive integration
-class GoogleDriveRequestor(APIRequestor):
-    def __init__(self):
-        super().__init__()
-        self.client_ID = r"390769709576-9ge3uljai3a9fpm7lmhhkdm4rcafaoq3.apps.googleusercontent.com"
-        self.scope = [r'https://www.googleapis.com/auth/drive.readonly', r'openid']
-        self.base_authorization_url = r'https://accounts.google.com/o/oauth2/v2/auth'
-        self.token_url = r'https://oauth2.googleapis.com/token'
-        
-        '''Note that it is known to be impossible to authenticate native desktop clients without an external trusted server.
-            For this reason, the OAUTH2.0 specification recomends that services do not require desktop clients to authenticate using a secret.
-            However, Google didn't read that and require a secret anyways.  
-            Hopefully they at least treat the secret as public information on their end as well :)'''
-        #if this was a production application, maybe we'd spin up an external server to handle client auth without leaking the secret
-        self.client_secret = r"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" 
-        
-    def load_token_with_name(self, key_name, API_db_manager):
+class GoogleDriveRequestor(APIRequestor):        
+    @staticmethod
+    def load_token_with_name(key_name, API_db_manager):
         #this method loads the token from the database and returns it
         #it returns None if the token is not found or if it is expired
         API_key = API_db_manager.retrieve_api_key_by_name(key_name)
@@ -106,10 +93,18 @@ class GoogleDriveRequestor(APIRequestor):
         
         
     #this method is used to authenticate with the service and get an access token
-    def get_token(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
-        token = self.load_token_with_name(key_name, API_db_manager)
+    @classmethod
+    def get_token(cls, key_name: str, API_db_manager: AccountDB.APIKeyManager):
+        token = cls.load_token_with_name(key_name, API_db_manager)
+    
         if token: #don't create a new token if it already exists
             raise ValueError("Token already exists")
+        
+        client_ID = r"390769709576-9ge3uljai3a9fpm7lmhhkdm4rcafaoq3.apps.googleusercontent.com"
+        scope = [r'https://www.googleapis.com/auth/drive.readonly', r'openid']
+        base_authorization_url = r'https://accounts.google.com/o/oauth2/v2/auth'
+        token_url = r'https://oauth2.googleapis.com/token'
+        client_secret = os.getenv("GOOGLE_CLIENT_KEY")
         
         #start the local server to capture the authorization response
         server_thread = threading.Thread(target=start_local_server)
@@ -118,13 +113,13 @@ class GoogleDriveRequestor(APIRequestor):
         server_started.wait(5)
         
         googleOAuth = SafeOAuth2Session(
-            client_id=self.client_ID,
+            client_id=client_ID,
             redirect_uri=redirect_uri,
-            scope=self.scope,
+            scope=scope,
         )
         
         authorization_url, __ = googleOAuth.authorization_url(
-            self.base_authorization_url,
+            base_authorization_url,
             access_type="offline",
             prompt="consent")
         
@@ -141,11 +136,11 @@ class GoogleDriveRequestor(APIRequestor):
         
         full_redirect_uri = redirect_uri[:-1] + authorization_response
         token = googleOAuth.fetch_token(
-            self.token_url,
+            token_url,
             authorization_response=full_redirect_uri,
-            client_id=self.client_ID,
+            client_id=client_ID,
             include_client_id=True,
-            client_secret=self.client_secret
+            client_secret=client_secret
         )
         
         authorization_response = None

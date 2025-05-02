@@ -4,9 +4,9 @@ from sqlalchemy.orm import sessionmaker
 
 from Backend.API_Key_Container.encryptionUtils import AESGCMSIVInterface
 
-Base = declarative_base()
+APIBase = declarative_base()
 
-class APIKey(Base):
+class APIKey(APIBase):
     __tablename__ = 'api_keys'
     id = Column(Integer, primary_key=True, autoincrement=True, unique=True) #unique identifier per api key
     name = Column(String, nullable=False, unique=True) #user inputed name for this api key
@@ -15,7 +15,7 @@ class APIKey(Base):
     encrypted_key = Column(LargeBinary, nullable=False)
     salt = Column(LargeBinary, nullable=False)
 
-class Secrets(Base):
+class Secrets(APIBase):
     __tablename__ = 'secrets'
     key = Column(String, primary_key=True, unique=True)  # Generic key column
     value = Column(LargeBinary, nullable=False)  # Generic value column (BLOB)
@@ -23,7 +23,7 @@ class Secrets(Base):
 class APIKeyManager:
     def __init__(self, db_url):
         self.engine = create_engine(db_url)
-        Base.metadata.create_all(self.engine)
+        APIBase.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         
         self.encryptor = AESGCMSIVInterface()
@@ -55,7 +55,7 @@ class APIKeyManager:
                 new_key = APIKey(name=name, service=service, account=account, encrypted_key=encrypted_data[0], salt=encrypted_data[1])
                 session.add(new_key)
                 session.commit()
-                session.close()
+            session.close()
     
     #this method is used to change an api key's name
     def rename_api_key(self, id, new_name):
