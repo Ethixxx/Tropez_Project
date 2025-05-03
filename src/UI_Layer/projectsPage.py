@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 from Backend.FileDatabase.database import fileDatabase
 
 class projects_page_base(tk.Frame):
@@ -11,10 +12,9 @@ class projects_page_base(tk.Frame):
             
             self.fileManager = fileManager
             
-            #create the new projects button            
-            self.new_project_button = ttk.Button(self, text="New", takefocus=False, command=self.new_project)
-            self.new_project_button.grid(row=0, column=0, sticky="nswe", padx='10p')
-            self.grid_columnconfigure(index=0, minsize='10p')
+            self.new_button = ttk.Button(self, text="New", takefocus=False, command=self.new_popup)
+            self.new_button.grid(row=0, column=0, sticky="nswe", padx='10p')
+
             
             #create the search box
             self.search_box = ttk.Entry(self, takefocus=False)
@@ -45,12 +45,34 @@ class projects_page_base(tk.Frame):
             self.tree.heading("Status", text="Status")
             self.tree.grid(row=1, column=0, columnspan=3, sticky="nswe", padx='10p', pady='10p')
             self.grid_rowconfigure(1, weight=1)
+            self.tree.bind("<Double-1>", self.on_tree_item_double_click)
 
             self.delete_button = ttk.Button(self, text="Delete Project", command=self.delete_project)
             self.delete_button.grid(row=2, column=1, sticky="nswe", padx='10p', pady='5p')
+
+            self.back_button = ttk.Button(self, text="Back", command=self.go_back)
+            self.back_button.grid(pady=5)
+
             
+            self.current_project_id = None
+            self.current_folder_id = None
+            self.navigation_stack = []  # back navigation stack
+
             self.load_projects()
-            
+
+        def go_back(self):
+            if self.navigation_stack:
+                previous_folder_id = self.navigation_stack.pop()
+                self.navigate_to_folder(previous_folder_id)
+            elif self.current_project_id != None:
+                # if you're not currently in a project
+                self.current_project_id = None
+                self.current_folder_id = None
+                self.navigation_stack = []
+                self.load_projects()
+            else:
+                messagebox.showinfo("Navigation", "No previous page to go back to.")
+
         def new_project(self):
             #create a pop up box
             self.new_project_window = tk.Toplevel(self)
@@ -121,7 +143,8 @@ class projects_page_base(tk.Frame):
             
             #insert the projects into the tree
             for project in all_projects:
-                self.tree.insert("", "end", values=project)
+                self.tree.insert("", "end", iid=f"project-{project.id}", 
+                    values=(project.id, project.name, project.description, getattr(project, "status", "")))
             
         
         def deselect(self):
@@ -165,3 +188,167 @@ class projects_page_base(tk.Frame):
                 self.load_projects()
             except Exception as e:
                 print(f"Error deleting project: {e}")
+
+
+        def create_folder_popup(self):
+            if self.current_folder_id is None:
+                print("No folder selected to add sub-folder to.")
+                return
+
+            win = tk.Toplevel(self)
+            win.title("Create Folder")
+            win.geometry("300x100")
+            win.resizable(False, False)
+
+            ttk.Label(win, text="Folder Name:").grid(row=0, column=0, padx=10, pady=10)
+            name_entry = ttk.Entry(win)
+            name_entry.grid(row=0, column=1, padx=10, pady=10)
+
+            def submit():
+                try:
+                    name = name_entry.get().strip()
+                    self.fileManager.create_folder(name=name, parent_id=self.current_folder_id)
+                    self.navigate_to_folder(self.current_folder_id)
+                    win.destroy()
+                except Exception as e:
+                    print(f"Error creating folder: {e}")
+
+            ttk.Button(win, text="Create", command=submit).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+        def create_file_popup(self):
+            if self.current_folder_id is None:
+                print("No folder selected to add file to.")
+                return
+
+            win = tk.Toplevel(self)
+            win.title("Create File")
+            win.geometry("300x100")
+            win.resizable(False, False)
+
+            ttk.Label(win, text="File Name:").grid(row=0, column=0, padx=10, pady=10)
+            name_entry = ttk.Entry(win)
+            name_entry.grid(row=0, column=1, padx=10, pady=10)
+
+            def submit():
+                try:
+                    name = name_entry.get().strip()
+                    self.fileManager.add_file(name=name, folder_id=self.current_folder_id)
+                    self.navigate_to_folder(self.current_folder_id)
+                    win.destroy()
+                except Exception as e:
+                    print(f"Error creating file: {e}")
+
+            ttk.Button(win, text="Create", command=submit).grid(row=1, column=0, columnspan=2, pady=10)
+
+        def new_popup(self):
+            win = tk.Toplevel(self)
+            win.title("Create New")
+            win.geometry("400x200")
+            win.resizable(False, False)
+            win.grab_set()
+
+            # Dropdown label and menu
+            ttk.Label(win, text="What would you like to create?").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+            type_box = ttk.Combobox(win, values=["Project", "Folder", "File"], state="readonly")
+            type_box.grid(row=0, column=1, padx=10, pady=10, sticky="we")
+            type_box.current(0)
+
+            # Name entry
+            ttk.Label(win, text="Name:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+            name_entry = ttk.Entry(win)
+            name_entry.grid(row=1, column=1, padx=10, pady=5, sticky="we")
+
+            # Description 
+            desc_label = ttk.Label(win, text="Description:")
+            desc_entry = ttk.Entry(win)
+
+            def on_type_change(event):
+                if type_box.get() == "Project":
+                    desc_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
+                    desc_entry.grid(row=2, column=1, padx=10, pady=5, sticky="we")
+                else:
+                    desc_label.grid_remove()
+                    desc_entry.grid_remove()
+
+            type_box.bind("<<ComboboxSelected>>", on_type_change)
+            on_type_change(None)
+
+            # Create button
+            create_btn = ttk.Button(win, text="Create")
+            create_btn.grid(row=3, column=0, columnspan=2, pady=15)
+
+            def submit():
+                name = name_entry.get().strip()
+                item_type = type_box.get()
+                try:
+                    if item_type == "Project":
+                        self.fileManager.create_project(name, desc_entry.get().strip())
+                        self.load_projects()
+                    elif item_type == "Folder":
+                        if self.current_folder_id is None:
+                            raise ValueError("You must be inside a project or folder to create a new folder.")
+                        self.fileManager.create_folder(name, parent_id=self.current_folder_id)
+                        self.navigate_to_folder(self.current_folder_id)
+                    elif item_type == "File":
+                        if self.current_folder_id is None:
+                            raise ValueError("You must be inside a folder to create a new file.")
+                        self.fileManager.add_file(name, folder_id=self.current_folder_id)
+                        self.navigate_to_folder(self.current_folder_id)
+                    win.destroy()
+                except Exception as e:
+                    print(f"Error: {e}")
+
+            create_btn.config(command=submit)
+
+            win.grid_columnconfigure(1, weight=1)  # Allow right-side widgets to expand
+
+
+        def navigate_to_project(self, project_id):
+            self.current_project_id = project_id
+            root_folder = self.fileManager.get_project_root(project_id)
+            self.tree.delete(*self.tree.get_children())  # clear
+            self.tree.insert("", "end", iid=f"folder-{root_folder.id}", values=(root_folder.id, root_folder.name, '', 'Folder'))
+            self.navigate_to_folder(root_folder.id)
+
+        def navigate_to_folder(self, folder_id):
+            self.current_folder_id = folder_id
+            self.tree.delete(*self.tree.get_children())
+
+            folders = self.fileManager.get_child_folders(folder_id, parent_folder=folder_id)
+            for folder in folders:
+                self.tree.insert("", "end", iid=f"folder-{folder.id}", values=(folder.id, folder.name, '', 'Folder'))
+
+            files = self.fileManager.get_child_files(folder_id)
+            for file in files:
+                self.tree.insert("", "end", iid=f"file-{file.id}", values=(file.id, file.name, '', 'File'))
+
+        def on_folder_double_click(self, event, item_id):
+            selected_item = self.tree.focus()
+            if selected_item.startswith("folder-"):
+                folder_id = int(selected_item.split("-")[1])
+                self.navigation_stack.append(self.current_folder_id)
+                self.navigate_to_folder(item_id)
+
+        def on_tree_item_double_click(self, event):
+            selected_item = self.tree.focus()
+            if not selected_item:
+                return
+            
+            parts = selected_item.split("-")
+            if len(parts) != 2:
+                print(f"Invalid item ID format: {selected_item}")
+                return
+
+            item_type, item_id_str = parts
+            item_id = int(item_id_str)
+
+            try:
+                if item_type == "project":
+                    self.navigate_to_project(item_id)
+                elif item_type == "folder":
+                    self.on_folder_double_click(event, item_id)
+                elif item_type == "file":
+                    print("idk yet") 
+            except Exception as e:
+                print(f"Navigation failed: {e}")
