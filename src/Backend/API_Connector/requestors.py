@@ -10,14 +10,15 @@ import webbrowser
 from urllib.parse import urlparse
 import os
 from jwt import JWT
+import time
 
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-
 #allow the oauth library to use http (subclassed to only allow localhost to use http)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 redirect_uri = r"http://localhost:8443/"
+
 class SafeOAuth2Session(OAuth2Session):
     def request(self, method, url, *args, **kwargs):
         parsed = urlparse(url)
@@ -74,7 +75,22 @@ class APIRequestor(ABC):
     
     
 #google drive integration
-class GoogleDriveRequestor(APIRequestor):        
+class GoogleDriveRequestor(APIRequestor):
+    service_name = "Google Drive"
+    service_hostname = "google.com"
+    
+    client_ID = r"390769709576-9ge3uljai3a9fpm7lmhhkdm4rcafaoq3.apps.googleusercontent.com"
+    scope = [r'https://www.googleapis.com/auth/drive.readonly', r'openid']
+    base_authorization_url = r'https://accounts.google.com/o/oauth2/v2/auth'
+    token_url = r'https://oauth2.googleapis.com/token'
+    client_secret = os.getenv("GOOGLE_CLIENT_KEY") 
+    
+    googleOAuth = SafeOAuth2Session(
+        client_id=client_ID,
+        redirect_uri=redirect_uri,
+        scope=scope,
+    )
+     
     @staticmethod
     def load_token_with_name(key_name, API_db_manager):
         #this method loads the token from the database and returns it
@@ -88,7 +104,7 @@ class GoogleDriveRequestor(APIRequestor):
             raise ValueError("Key exists, but is not for Google Drive")
         
         #retrieve the token from the data
-        token = pickle.loads(API_key[1])
+        token = API_key[1]
         return token
         
         
@@ -100,26 +116,14 @@ class GoogleDriveRequestor(APIRequestor):
         if token: #don't create a new token if it already exists
             raise ValueError("Token already exists")
         
-        client_ID = r"390769709576-9ge3uljai3a9fpm7lmhhkdm4rcafaoq3.apps.googleusercontent.com"
-        scope = [r'https://www.googleapis.com/auth/drive.readonly', r'openid']
-        base_authorization_url = r'https://accounts.google.com/o/oauth2/v2/auth'
-        token_url = r'https://oauth2.googleapis.com/token'
-        client_secret = os.getenv("GOOGLE_CLIENT_KEY")
-        
         #start the local server to capture the authorization response
         server_thread = threading.Thread(target=start_local_server)
         server_thread.start()
         
         server_started.wait(5)
         
-        googleOAuth = SafeOAuth2Session(
-            client_id=client_ID,
-            redirect_uri=redirect_uri,
-            scope=scope,
-        )
-        
-        authorization_url, __ = googleOAuth.authorization_url(
-            base_authorization_url,
+        authorization_url, __ = cls.googleOAuth.authorization_url(
+            cls.base_authorization_url,
             access_type="offline",
             prompt="consent")
         
@@ -135,12 +139,12 @@ class GoogleDriveRequestor(APIRequestor):
             raise ValueError("Authorization response not received. Please try again.")
         
         full_redirect_uri = redirect_uri[:-1] + authorization_response
-        token = googleOAuth.fetch_token(
-            token_url,
+        token = cls.googleOAuth.fetch_token(
+            token_url=cls.token_url,
             authorization_response=full_redirect_uri,
-            client_id=client_ID,
+            client_id=cls.client_ID,
             include_client_id=True,
-            client_secret=client_secret
+            client_secret=cls.client_secret
         )
         
         authorization_response = None
@@ -152,11 +156,55 @@ class GoogleDriveRequestor(APIRequestor):
         existing_key = API_db_manager.retrieve_id_with_account_and_service(account_id, "Google Drive")
         if existing_key:
             #if the key already exists, update it
-            API_db_manager.change_api_key(existing_key, pickle.dumps(token))
+            API_db_manager.change_api_key(existing_key, token.get["refresh_token"])
             API_db_manager.rename_api_key(existing_key, key_name)
         else:
             #if the key does not exist, create it
-            API_db_manager.store_api_key(key_name, account_id, "Google Drive", pickle.dumps(token))
+            API_db_manager.store_api_key(key_name, account_id, "Google Drive", token.get["refresh_token"])
+    
+    @staticmethod
+    def get_tokens_by_service(API_db_manager: AccountDB.APIKeyManager):
+        return API_db_manager.retrieve_api_keys_by_service("Google Drive")
+    
+    @classmethod
+    def check_access(cls, URL: str, API_db_manager: AccountDB.APIKeyManager):
+        #check if the URL is a file link
+        if "/d/" not in URL:
+            return False
+        
+        #get the file id
+        file_id = URL.split("/d/")[1].split("/")[0]
+        
+        keys = cls.get_tokens_by_service(API_db_manager)
+        for key in keys:
+            refreshToken = key[1]
+            
+            #generate an access token
+            accessToken = cls.googleOAuth.refresh_token(
+                                token_url='https://oauth2.googleapis.com/token',
+                                refresh_token=refreshToken,
+                                client_id=cls.client_ID,
+                                client_secret=cls.client_secret
+                            )
+            
+            
+            #ask google if the file is accessible
+            try:
+                response = cls.googleOAuth.get(
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true",
+                    headers={
+                        'Authorization': f'Bearer {accessToken}'
+                    }
+                )
+                
+                if response.status_code == 200:
+                    #if the file is accessible, return True
+                    return (key[0], response.json())
+            except Exception as e:
+                # Log or handle the exception as needed
+                print(f"An error occurred: {e}")
+            
+        return None
 
 class oneDriveRequestor(APIRequestor):
     def __init__(self):
@@ -223,3 +271,7 @@ class oneDriveRequestor(APIRequestor):
         )
 
         API_db_manager.store_api_key(key_name, "OneDrive", pickle.dumps(token))
+        
+
+supported_services = {'Google Drive': GoogleDriveRequestor}
+supported_services_url = {'google.com': GoogleDriveRequestor}

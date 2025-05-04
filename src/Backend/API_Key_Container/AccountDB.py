@@ -45,7 +45,7 @@ class APIKeyManager:
 
     #this method is used to securely encrypt and store new api keys
     def store_api_key(self, name, account, service, api_key):
-        encrypted_data = self.encryptor.encrypt_with_auth(api_key, self.master_key)
+        encrypted_data = self.encryptor.encrypt_with_auth(api_key.encode(), self.master_key)
         if encrypted_data:
             session = self.Session()
             
@@ -106,7 +106,7 @@ class APIKeyManager:
         return (service[0] for service in services)
     
     #this method lists all api keys
-    def list_all_api_keys(self):
+    def list_all_api_keys(self: int) -> list[tuple[int, str]]:
         session = self.Session()
         key_entries = session.query(APIKey).all()
         keys = [(key_entry.id, key_entry.name) for key_entry in key_entries]
@@ -114,7 +114,7 @@ class APIKeyManager:
         return keys
 
     #this method is used to find and decrypt an api key entry from its id for use in upper levels
-    def retrieve_api_key_by_id(self, id):
+    def retrieve_api_key_by_id(self, id: int) -> tuple[str, bytes]:
         session = self.Session()
         key_entry = session.query(APIKey).filter_by(id=id).first()
         if key_entry:
@@ -125,9 +125,20 @@ class APIKeyManager:
                 return decrypted_key
         session.close()
         return None
+    
+    def retrieve_api_keys_by_service(self, service) -> list[tuple[int, bytes]]:
+        session = self.Session()
+        key_entries = session.query(APIKey).filter_by(service=service).all()
+        keys = []
+        for key_entry in key_entries:
+            decrypted_key = (key_entry.id,self.encryptor.decrypt_with_auth(key_entry.encrypted_key, key_entry.salt, self.master_key))
+            if decrypted_key[1]:
+                keys.append(decrypted_key)
+        
+        return keys
         
     #this method is used to find and decrypt an api key entry from its name for use in upper levels
-    def retrieve_api_key_by_name(self, name):
+    def retrieve_api_key_by_name(self, name: str) -> tuple[str, bytes]:
         session = self.Session()
         key_entry = session.query(APIKey).filter_by(name=name).first()
         if key_entry:
@@ -139,7 +150,7 @@ class APIKeyManager:
         session.close()
         return None
     
-    def retrieve_id_with_account_and_service(self, account, service):
+    def retrieve_id_with_account_and_service(self, account: str, service: str) -> int:
         session = self.Session()
         key_entry = session.query(APIKey).filter_by(account=account, service=service).first()
         if key_entry:

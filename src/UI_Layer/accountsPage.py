@@ -5,8 +5,6 @@ from Backend.API_Connector import requestors
 from Backend.API_Key_Container.AccountDB import APIKeyManager
 
 class accounts_page_base(tk.Frame):
-    supported_services = {'Google Drive': requestors.GoogleDriveRequestor}
-    
     def __init__(self, parent, APIManager: APIKeyManager = None):
         super().__init__(parent)
         
@@ -101,7 +99,7 @@ class accounts_page_base(tk.Frame):
         
         service_entry = ttk.Combobox(self.new_key_window, takefocus=False, state="readonly")
         service_entry.grid(row=1, column=1, padx='10p', pady='10p')
-        service_entry['values'] = list(self.supported_services.keys())
+        service_entry['values'] = list(requestors.supported_services.keys())
         service_entry.current(0)
         
         #start and cancel button
@@ -122,16 +120,7 @@ class accounts_page_base(tk.Frame):
             return
     
         #create a new key for the service and store it in the database
-        self.supported_services[service].get_token(name, self.manager)
-        '''try:
-            self.supported_services[service].get_token(name, self.manager)
-        except ValueError as e:
-            #if the key already exists, highlight the name box in red
-            print(e.with_traceback)
-            name_entry = self.new_key_window.children['!entry']
-            name_entry.configure(foreground='red')
-            name_entry.focus_set()
-            return'''
+        requestors.supported_services[service].get_token(name, self.manager)
         
         #close the window and reload the accounts page
         self.load_accounts()

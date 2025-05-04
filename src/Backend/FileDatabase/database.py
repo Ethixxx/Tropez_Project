@@ -2,6 +2,44 @@ from typing import NamedTuple
 from sqlalchemy import create_engine, Column, String, Integer, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from os.path import normpath
+
+
+# Return Types
+'''
+class ProjectInfo(NamedTuple):
+    id: int
+    name: str
+    description: str
+    status: str
+'''
+class ProjectInfo(NamedTuple):
+    id: int
+    name: str
+    description: str
+    status: str
+
+'''
+class FolderInfo(NamedTuple):
+    id: int
+    name: str
+'''
+class FolderInfo(NamedTuple):
+    id: int
+    name: str
+
+
+'''
+class FileInfo(NamedTuple):
+    id: int
+    name: str
+    URL: str
+'''
+class FileInfo(NamedTuple):
+    id: int
+    name: str
+    URL: str
+
 
 FileBase = declarative_base()
 
@@ -28,24 +66,10 @@ class Folder(FileBase):
 class File(FileBase):
     __tablename__ = 'files'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    URL = Column(String, nullable=False, unique=True)
     name = Column(String, nullable=False)
     folder_id = Column(Integer, ForeignKey('folders.id'), nullable=False, index=True)
     folder = relationship('Folder', back_populates='files', foreign_keys=folder_id)
-
-# Return Types
-class ProjectInfo(NamedTuple):
-    id: int
-    name: str
-    description: str
-    status: str
-
-class FolderInfo(NamedTuple):
-    id: int
-    name: str
-
-class FileInfo(NamedTuple):
-    id: int
-    name: str
 
 class fileDatabase:
     def __init__(self, db_url='sqlite:///project_explorer.db'):
@@ -131,8 +155,9 @@ class fileDatabase:
             if existing_project:
                 raise ValueError(f"Project with name '{new_name}' already exists.")
             
-            project.name = new_name
-            session.commit()
+            if(normpath('(path-to-wiki)/foo/bar.txt').startswith('(path-to-wiki)')):
+                project.name = new_name
+                session.commit()
             
         except Exception as e:
             session.rollback()
@@ -189,6 +214,9 @@ class fileDatabase:
         session = self.Session()
         
         try:
+            if(not normpath('(path-to-wiki)/foo/bar.txt').startswith('(path-to-wiki)')):
+                return
+            
             # Ensure that the parent folder exists
             if parent_id:
                 parent_folder = session.query(Folder).filter_by(id=parent_id).one_or_none()
@@ -216,7 +244,7 @@ class fileDatabase:
             session.close()
     
     
-    def get_child_folders(self, identifier: int | str, parent_folder: int, max: int = None, skip: int = None):
+    def get_child_folders(self, identifier: int | str, parent_folder: int = None, max: int = None, skip: int = None):
         session = self.Session()
         
         try:
@@ -234,7 +262,6 @@ class fileDatabase:
             if not folder:
                 raise ValueError(f"Folder: '{identifier}' does not exist.")
             
-            
             children = session.query(Folder).filter_by(parent_id=folder.id)
             
             if(max is not None):
@@ -243,7 +270,7 @@ class fileDatabase:
                 children = children.offset(skip)
                 
             
-            return [FolderInfo(child.id, child.name) for child in children.all()]
+            return [FolderInfo(child.id, child.name, child.URL) for child in children.all()]
             
         except Exception as e:
             raise e
@@ -272,7 +299,7 @@ class fileDatabase:
         finally:
             session.close()
             
-    def add_file(self, name: str, folder_id: int):
+    def add_file(self, name: str, folder_id: int, url: str):
         session = self.Session()
         
         try:
@@ -285,8 +312,12 @@ class fileDatabase:
             if session.query(File).filter_by(name=name, folder_id=folder_id).first():
                 raise ValueError(f"File with name '{name}' already exists in the folder.")
             
+            #ensure that no files with this url already exist
+            if session.query(File).filter_by(URL=url).first():
+                raise ValueError(f"File with URL '{url}' already exists.")
+            
             # Create the file and add it to the database
-            new_file = File(name=name, folder=folder)
+            new_file = File(name=name, folder=folder, URL=url)
             session.add(new_file)
             session.commit()
             
@@ -306,14 +337,14 @@ class fileDatabase:
             if not folder:
                 raise ValueError(f"Folder: '{folder_id}' does not exist.")
             
-            files = session.query(File).filter_by(folder_id=folder.id)
+            query = session.query(File).filter_by(folder_id=folder_id)
             
-            if(max is not None):
-                files = files.limit(max)
-            if(skip is not None):
-                files = files.offset(skip)
+            if max is not None:
+                query = query.limit(max)
+            if skip is not None:
+                query = query.offset(skip)
                 
-            return [FileInfo(file.id, file.name) for file in files.all()]
+            return [FileInfo(file.id, file.name, file.URL) for file in query.all()]
             
         except Exception as e:
             raise e
@@ -369,6 +400,22 @@ class fileDatabase:
             project = session.query(Project).filter_by(id=folder.project_id).one_or_none()
             
             return ProjectInfo(project.id, project.name, project.description, project.status)
+            
+        except Exception as e:
+            raise e
+        finally:
+            session.close()
+            
+    def get_folder(self, folder_id: int):
+        session = self.Session()
+        
+        try:
+            folder = session.query(Folder).filter_by(id=folder_id).one_or_none()
+            
+            if not folder:
+                raise ValueError(f"Folder: '{folder_id}' does not exist.")
+            
+            return FolderInfo(folder.id, folder.name)
             
         except Exception as e:
             raise e
@@ -470,6 +517,38 @@ class fileDatabase:
             
         except Exception as e:
             session.rollback()
+            raise e
+        finally:
+            session.close()
+            
+    def validate_folder(self, folder_id: int):
+        session = self.Session()
+        
+        try:
+            folder = session.query(Folder).filter_by(id=folder_id).one_or_none()
+            
+            if not folder:
+                return False
+            
+            return True
+            
+        except:
+            return False
+        finally:
+            session.close()
+            
+    def get_file(self, file_id: int):
+        session = self.Session()
+        
+        try:
+            file = session.query(File).filter_by(id=file_id).one_or_none()
+            
+            if not file:
+                raise ValueError(f"File: '{file_id}' does not exist.")
+            
+            return FileInfo(file.id, file.name, file.URL)
+            
+        except Exception as e:
             raise e
         finally:
             session.close()

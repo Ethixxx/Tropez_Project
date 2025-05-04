@@ -72,6 +72,7 @@ class MainApp():
         self.accounts_icon = ImageTk.PhotoImage(Image.open(icon_directory / r"accounts-office-line-2-0.5x.png").resize((button_icon_dimensions, button_icon_dimensions)))
         self.accounts_button = tk.Button(self.top_sidebar_menu, image=self.accounts_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.accounts_page))
         self.accounts_button.pack(side="bottom", pady=(button_height_padding, button_width_padding), fill="x")
+        
     
     def initialize_main_pages(self):
         # Separator between sidebar and main content
@@ -87,7 +88,7 @@ class MainApp():
         self.main_frame.grid_propagate(False)
         
         # Create the main pages
-        self.projects_page = projects_page_base(self.main_frame, self.fileStore)
+        self.projects_page = projects_page_base(self.main_frame, self.fileStore, self.APIKeyStore)
         self.settings_page = settings_page_base(self.main_frame)
         self.accounts_page = accounts_page_base(self.main_frame, self.APIKeyStore)
 
