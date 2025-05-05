@@ -207,54 +207,51 @@ class GoogleDriveRequestor(APIRequestor):
         return None
 
 class oneDriveRequestor(APIRequestor):
-    def __init__(self):
-        super().__init__()
-        self.client_ID = r"50d8f110-4943-4b84-a680-d4cb5040b262"
-        self.scope = [r"https://graph.microsoft.com/Files.Read", "offline_access"]
-        self.base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-        self.token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
-        
-        self.client_secret = None
-        secret_path = Path(__file__).resolve().parent.parent.parent / "Backend" / "API_Connector" / 'onedrive_client_secret.txt'
-        with open(secret_path, 'r') as f:
-            self.client_secret = f.read().strip()
+    service_name = "OneDrive"
+    service_hostname = "onedrive.com"
 
-    def load_token_with_name(self, key_name, API_db_manager):
+    client_ID = r"50d8f110-4943-4b84-a680-d4cb5040b262"
+    scope = [r"https://graph.microsoft.com/Files.Read", "offline_access"]
+    base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
+    client_secret = os.getenv("ONEDRIVE_CLIENT_KEY") 
+
+    @classmethod
+    def load_token_with_name(cls, key_name: str, API_db_manager: AccountDB.APIKeyManager):
         API_key = API_db_manager.retrieve_api_key_by_name(key_name)
-        
+
         if API_key is None:
             return None
-        
-        if API_key[0] != "OneDrive":
-            raise ValueError("Key already exists, but is not for OneDrive")
-        
+
+        if API_key[0] != cls.service_name:
+            raise ValueError(f"Key exists, but is not for {cls.service_name}")
+
         token = pickle.loads(API_key[1])
         return token
-    
-    def get_token(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
-        token = self.load_token_with_name(key_name, API_db_manager)
+
+    @classmethod
+    def get_token(cls, key_name: str, API_db_manager: AccountDB.APIKeyManager):
+        token = cls.load_token_with_name(key_name, API_db_manager)
         if token:
-            return
+            raise ValueError("Token already exists")
 
         oneDriveOAuth = SafeOAuth2Session(
-            client_id=self.client_ID,
+            client_id=cls.client_ID,
             redirect_uri=redirect_uri,
-            scope=self.scope
+            scope=cls.scope
         )
 
-        authorization_url, state = oneDriveOAuth.authorization_url(
-            self.base_authorization_url,
-            access_type="offline",
-            prompt="consent")
-        
+        # start local server
         global authorization_response
         authorization_response = None
-
         server_thread = threading.Thread(target=start_local_server)
         server_thread.start()
-        
-        webbrowser.open(authorization_url)
-        
+        webbrowser.open(oneDriveOAuth.authorization_url(
+            cls.base_authorization_url,
+            access_type="offline",
+            prompt="consent"
+        )[0])
+
         server_thread.join(30)
 
         if authorization_response is None:
@@ -263,15 +260,51 @@ class oneDriveRequestor(APIRequestor):
         full_redirect_uri = redirect_uri[:-1] + authorization_response
 
         token = oneDriveOAuth.fetch_token(
-            self.token_url,
+            token_url=cls.token_url,
             authorization_response=full_redirect_uri,
-            client_id=self.client_ID,
+            client_id=cls.client_ID,
             include_client_id=True,
-            client_secret=self.client_secret
+            client_secret=cls.client_secret
         )
 
-        API_db_manager.store_api_key(key_name, "OneDrive", pickle.dumps(token))
-        
+        # store the token in the database
+        API_db_manager.store_api_key(key_name, cls.service_name, pickle.dumps(token))
 
-supported_services = {'Google Drive': GoogleDriveRequestor}
-supported_services_url = {'google.com': GoogleDriveRequestor}
+    @classmethod
+    def check_access(cls, URL: str, API_db_manager: AccountDB.APIKeyManager):
+        # onedrive-specific url validation
+        if "onedrive.live.com" not in URL:
+            return False
+        
+        keys = API_db_manager.retrieve_api_keys_by_service("OneDrive")
+        for key in keys:
+            token = pickle.loads(key[1])
+            oneDriveOAuth = SafeOAuth2Session(
+                client_id=cls.client_ID,
+                token=token
+            )
+
+            try:
+                response = oneDriveOAuth.get(
+                    "https://graph.microsoft.com/v1.0/me/drive/root/children",  # example endpoint
+                    headers={'Authorization': f'Bearer {token["access_token"]}'}
+                )
+
+                if response.status_code == 200:
+                    return (key[0], response.json())
+            except Exception as e:
+                print(f"Error accessing OneDrive file: {e}")
+        
+        return None
+
+
+supported_services = {
+    'Google Drive': GoogleDriveRequestor,
+    'OneDrive': oneDriveRequestor
+}
+supported_services_url = {
+    'google.com': GoogleDriveRequestor,
+    'live.com': oneDriveRequestor,
+    'onedrive.live.com': oneDriveRequestor,
+    'microsoft.com': oneDriveRequestor
+}
