@@ -270,7 +270,7 @@ class fileDatabase:
                 children = children.offset(skip)
                 
             
-            return [FolderInfo(child.id, child.name, child.URL) for child in children.all()]
+            return [FolderInfo(child.id, child.name) for child in children.all()]
             
         except Exception as e:
             raise e
