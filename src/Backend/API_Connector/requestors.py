@@ -156,11 +156,11 @@ class GoogleDriveRequestor(APIRequestor):
         existing_key = API_db_manager.retrieve_id_with_account_and_service(account_id, "Google Drive")
         if existing_key:
             #if the key already exists, update it
-            API_db_manager.change_api_key(existing_key, token.get["refresh_token"])
+            API_db_manager.change_api_key(existing_key, token["refresh_token"])
             API_db_manager.rename_api_key(existing_key, key_name)
         else:
             #if the key does not exist, create it
-            API_db_manager.store_api_key(key_name, account_id, "Google Drive", token.get["refresh_token"])
+            API_db_manager.store_api_key(key_name, account_id, "Google Drive", token["refresh_token"])
     
     @staticmethod
     def get_tokens_by_service(API_db_manager: AccountDB.APIKeyManager):
