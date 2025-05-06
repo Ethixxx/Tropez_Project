@@ -15,7 +15,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from urllib import parse
-
+import base64
 
 #allow the oauth library to use http (subclassed to only allow localhost to use http)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -297,11 +297,16 @@ class oneDriveRequestor(APIRequestor):
     service_name = "OneDrive"
     service_hostname = "onedrive.com"
 
-    client_ID = r"50d8f110-4943-4b84-a680-d4cb5040b262"
-    scope = [r"https://graph.microsoft.com/Files.Read", "offline_access"]
+    client_ID = r"77225b40-605d-45b7-822b-f8a1530691f6"
+    scope = r"https://graph.microsoft.com/Files.Read"
     base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
-    client_secret = os.getenv("ONEDRIVE_CLIENT_KEY") 
+
+    oneDriveOAuth = OAuth2Session(
+        client_id=client_ID,
+        redirect_uri=redirect_uri,
+        scope=scope
+    )
 
     @classmethod
     def load_token_with_name(cls, key_name: str, API_db_manager: AccountDB.APIKeyManager):
@@ -322,22 +327,16 @@ class oneDriveRequestor(APIRequestor):
         if token:
             raise ValueError("Token already exists")
 
-        oneDriveOAuth = SafeOAuth2Session(
-            client_id=cls.client_ID,
-            redirect_uri=redirect_uri,
-            scope=cls.scope
-        )
-
         # start local server
         global authorization_response
         authorization_response = None
         server_thread = threading.Thread(target=start_local_server)
         server_thread.start()
-        webbrowser.open(oneDriveOAuth.authorization_url(
+        authorization_url, _ = cls.oneDriveOAuth.authorization_url(
             cls.base_authorization_url,
-            access_type="offline",
-            prompt="consent"
-        )[0])
+            prompt="consent",
+        )
+        webbrowser.open(authorization_url)
 
         server_thread.join(30)
 
@@ -346,42 +345,65 @@ class oneDriveRequestor(APIRequestor):
 
         full_redirect_uri = redirect_uri[:-1] + authorization_response
 
-        token = oneDriveOAuth.fetch_token(
+        token = cls.oneDriveOAuth.fetch_token(
             token_url=cls.token_url,
             authorization_response=full_redirect_uri,
-            client_id=cls.client_ID,
             include_client_id=True,
-            client_secret=cls.client_secret
+            client_id=cls.client_ID
         )
 
-        # store the token in the database
-        API_db_manager.store_api_key(key_name, cls.service_name, token["refresh_token"])
+        me_response = cls.oneDriveOAuth.get("https://graph.microsoft.com/v1.0/me")
+        if me_response.status_code != 200:
+            raise ValueError("Failed to fetch user info for token association.")
+        account_id = me_response.json()["id"]
+
+        API_db_manager.store_api_key(key_name, account_id, cls.service_name, pickle.dumps(token))
+
 
     @classmethod
     def check_access(cls, URL: str, API_db_manager: AccountDB.APIKeyManager):
-        # onedrive-specific url validation
-        if "onedrive.live.com" not in URL:
+        if not URL:
             return False
-        
+
         keys = API_db_manager.retrieve_api_keys_by_service("OneDrive")
+        if not keys:
+            print("No OneDrive API keys available.")
+            return False
+
         for key in keys:
             token = pickle.loads(key[1])
-            oneDriveOAuth = SafeOAuth2Session(
-                client_id=cls.client_ID,
-                token=token
-            )
+            oneDriveOAuth = SafeOAuth2Session(client_id=cls.client_ID, token=token)
 
+            # check if its a shared link
             try:
-                response = oneDriveOAuth.get(
-                    "https://graph.microsoft.com/v1.0/me/drive/root/children",  # example endpoint
-                    headers={'Authorization': f'Bearer {token["access_token"]}'}
-                )
+                share_id = base64.urlsafe_b64encode(URL.encode()).decode().rstrip("=")
+                share_endpoint = f"https://graph.microsoft.com/v1.0/shares/u!{share_id}/driveItem"
 
+                response = oneDriveOAuth.get(share_endpoint)
                 if response.status_code == 200:
                     return (key[0], response.json())
             except Exception as e:
-                print(f"Error accessing OneDrive file: {e}")
-        
+                print(f"Shared link access failed: {e}")
+
+            # if not, check if its a file path or ID
+            try:
+                path = urlparse(URL).path
+                path = unquote(path.strip("/"))
+
+                # check whether it's a path or a file ID
+                if "/" in path or "." in path:  # likely a path like /Documents/test.pdf
+                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/root:/{path}"
+                else:  # likely an ID
+                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/items/{path}"
+
+                response = oneDriveOAuth.get(endpoint)
+                if response.status_code == 200:
+                    return (key[0], response.json())
+                else:
+                    print(f"Fallback access failed: {response.status_code} - {response.text}")
+            except Exception as e:
+                print(f"Error trying fallback access: {e}")
+
         return None
 
 def get_requestor(URL: str) -> APIRequestor:
@@ -419,5 +441,7 @@ supported_services = {
 supported_services_url = {
     'google.com': GoogleDriveRequestor,
     'live.com': oneDriveRequestor,
+    '1drv.ms': oneDriveRequestor,
+    'onedrive.live.com': oneDriveRequestor,
     'microsoft.com': oneDriveRequestor
 }
