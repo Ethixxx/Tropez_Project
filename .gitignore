@@ -182,3 +182,5 @@ cython_debug/
 
 #environment variables
 **.env
+
+tempfile.*

@@ -51,18 +51,19 @@ class projects_page_base(tk.Frame):
             self.path_textbox.grid(row=1, column=0, columnspan=3, sticky="nswe", padx='10p')
             
             #create the project tree
-            self.tree = ttk.Treeview(self, columns=("Name", "Description", "Status"), show='headings')
+            self.tree = ttk.Treeview(self, columns=("Name", "Description", "Status"), show='headings', selectmode='browse', takefocus=True)
             self.tree.heading("Name", text="Name")
             self.tree.heading("Description", text="Description")
             self.tree.heading("Status", text="Status")
             self.tree.grid(row=2, column=0, columnspan=3, sticky="nswe", padx='10p', pady='10p')
             self.grid_rowconfigure(2, weight=1)
             self.tree.bind("<Double-1>", self.on_tree_item_double_click)
+            self.tree.bind("<<TreeviewSelect>>", lambda event: self.on_tree_item_select())
 
-            self.delete_button = ttk.Button(self, text="Delete Project", command=self.delete_project)
+            self.delete_button = ttk.Button(self, text="Delete", command=self.delete_something, state="disabled")
             self.delete_button.grid(row=3, column=1, sticky="nswe", padx='10p', pady='5p')
 
-            self.back_button = ttk.Button(self, text="Back", command=self.go_back)
+            self.back_button = ttk.Button(self, text="Back", command=self.go_back, state="disabled")
             self.back_button.grid(pady=5, row=3, column=0)
 
             
@@ -77,12 +78,15 @@ class projects_page_base(tk.Frame):
             if len(self.navigation_stack) > 1:
                 self.navigation_stack.pop(-1)
                 self.navigate_to_folder(self.navigation_stack[-1])
-            elif self.current_project_id != None:
-                # if you're not currently in a project
+            else:
+                self.full_path = ""
+                self.path_textbox.config(text="Path: ")
                 self.current_project_id = None
                 self.current_folder_id = None
                 self.navigation_stack = []
                 self.update_file_tree()
+                self.on_tree_item_select()
+                self.back_button.config(state="disabled")
             
         
         def create_new_project(self, project_name: str, project_description: str):
@@ -90,7 +94,6 @@ class projects_page_base(tk.Frame):
             try:
                 self.fileManager.create_project(project_name, project_description)
             except Exception as e:
-                self.project_name_entry.focus_set()
                 #print the error message
                 print(e)
                 return
@@ -111,18 +114,33 @@ class projects_page_base(tk.Frame):
             return None
 
 
-        def delete_project(self):
-            project_id = self.get_selected_project_id()
-            if project_id is None:
-                print("No project selected to delete.")
-                return
-
-            try:
-                if(isinstance(project_id, int)):
-                    self.fileManager.delete_project(project_id)
-                    self.update_file_tree()
-            except:
-                print("Project not found")
+        def delete_something(self):
+            selected_item = self.tree.focus()
+            if not selected_item:
+                return None
+            
+            id = int(selected_item.split("-")[1])
+            if selected_item.startswith("project-"):
+                try:
+                    if(id):
+                        self.fileManager.delete_project(id)
+                        self.update_file_tree()
+                except:
+                    print("Project not found")
+            elif selected_item.startswith("folder-"):
+                try:
+                    if(id):
+                        self.fileManager.remove_folder(id)
+                        self.update_file_tree()
+                except:
+                    print("Folder not found")
+            elif selected_item.startswith("file-"):
+                try:
+                    if(id):
+                        self.fileManager.remove_file(id)
+                        self.update_file_tree()
+                except:
+                    print("File not found")
 
         def new_popup(self):
             win = tk.Toplevel(self)
@@ -193,6 +211,7 @@ class projects_page_base(tk.Frame):
                     self.update_file_tree()
                 except Exception as e:
                     print(f"Error: {e}")
+                    self.update_file_tree()
 
             # Create button
             create_btn = ttk.Button(win, text="Create", command=submit)
@@ -214,6 +233,7 @@ class projects_page_base(tk.Frame):
             root_folder = self.fileManager.get_project_root(project_id)
 
             self.navigate_to_folder(root_folder.id)
+            self.back_button.config(state="normal")
 
         def navigate_to_folder(self, folder_id):
             self.current_folder_id = folder_id
@@ -252,7 +272,7 @@ class projects_page_base(tk.Frame):
                 # Display files
                 files = self.fileManager.get_child_files(self.current_folder_id)
                 for file in files:
-                    self.tree.insert("", "end", iid=f"file-{file.id}", values=(file.name, '', 'File'))
+                    self.tree.insert("", "end", iid=f"file-{file.id}", values=(file.name, file.description, 'File'))
             else:
                 # Clear the navigation stack
                 self.navigation_stack = []
@@ -263,17 +283,27 @@ class projects_page_base(tk.Frame):
                 # Get the projects from the database
                 all_projects = self.fileManager.list_projects()
                 
-                # Optionally sort the projects
-                sort_by = self.sort_by_box.get()
-                if sort_by == "Name":
-                    all_projects.sort(key=lambda x: x.name.lower())
-                elif sort_by == "Status":
-                    all_projects.sort(key=lambda x: x.status.lower())
-                
                 # Insert the projects into the tree
                 for project in all_projects:
                     self.tree.insert("", "end", iid=f"project-{project.id}", 
                         values=(project.name, project.description, project.status))
+                
+            #sort the tree    
+            sort_by = self.sort_by_box.get()
+            if sort_by == "Name":
+                # Get all items in the tree
+                items = [(self.tree.item(item_id, "values")[0], item_id) for item_id in self.tree.get_children()]
+                
+                # Sort items by the "Name" column (case-insensitive)
+                items.sort(key=lambda x: x[0].lower())
+                
+                # Reinsert items in sorted order
+                for index, (name, item_id) in enumerate(items):
+                    self.tree.move(item_id, "", index)
+                    
+            #update the selected item (now None)
+            self.delete_button.config(state="disabled")
+            self.delete_button.config(text="Delete")
 
 
         def on_tree_item_double_click(self, event):
@@ -303,6 +333,33 @@ class projects_page_base(tk.Frame):
                         print(f"File with ID {item_id} not found.")
             except Exception as e:
                 print(f"Navigation failed: {e}")
+                
+        def on_tree_item_select(self):
+            selected_item = self.tree.focus()
+            if not selected_item:
+                return
+
+            print("Selected item:", selected_item)
+            parts = selected_item.split("-")
+            if len(parts) != 2:
+                print(f"Invalid item ID format: {selected_item}")
+                return
+
+            item_type, item_id = parts
+            item_id = int(item_id)
+
+            if item_type == "project":
+                self.delete_button.config(state="normal")
+                self.delete_button.config(text="Delete Project")
+            elif item_type == "folder":
+                self.delete_button.config(state="normal")
+                self.delete_button.config(text="Delete Folder")
+            elif item_type == "file":
+                self.delete_button.config(state="normal")
+                self.delete_button.config(text="Delete File")
+            else:
+                self.delete_button.config(state="disabled")
+                self.delete_button.config(text="Delete")
         
         def deselect(self):
             self.focus_set()

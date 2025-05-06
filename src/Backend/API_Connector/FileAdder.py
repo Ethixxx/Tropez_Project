@@ -40,12 +40,16 @@ class FileOrchestrator:
                 while not self.processingQueue and self.processing_thread_running:
                     self.processing_wakeup.wait()
                 
+                
                 while(self.processingQueue and self.processing_thread_running):
-                    file = heapq.heappop(self.processingQueue)
-                    if(file.function == self.FileObject.Functions.ADD_FILE):
-                        self.__add_file(file.URL, file.folderID, description=file.description)
-                    elif(file.function == self.FileObject.Functions.GET_SUMMARY):
-                        self.__summarize_external_file(file.URL, file.folderID, file.fileID)
+                    try:
+                        file = heapq.heappop(self.processingQueue)
+                        if(file.function == self.FileObject.Functions.ADD_FILE):
+                            self.__add_file(file.URL, file.folderID, description=file.description)
+                        elif(file.function == self.FileObject.Functions.GET_SUMMARY):
+                            self.__summarize_external_file(URL=file.URL, fileID=file.fileID)
+                    except Exception as e:
+                        print(f"Error processing file: {e}")
         
     class FileObject:
         def __init__(self, function: int, priority: int, URL: str = None, folderID: int = None, fileID: int = None, description: str = None):
@@ -108,8 +112,10 @@ class FileOrchestrator:
                 
                 heapq.heappush(self.processingQueue, file)
                 self.processing_wakeup.notify()
+        else:
+            raise ValueError(f"Could not access file {URL} with any of the API keys.")
 
-    def __summarize_external_file(self, URL: str, folderID: int, fileID: int):
+    def __summarize_external_file(self, URL: str, fileID: int):
         """
         Summarizes an external file and adds it to the database.
         
@@ -122,14 +128,18 @@ class FileOrchestrator:
         Returns:
             bool: True if the file was successfully summarized, False otherwise.
         """
+        if not URL:
+            #get the URL from the database
+            file = self.file_database.get_file(fileID)
+            URL = file.URL
+        
         service_requestor = requestors.get_requestor(URL)
         
-        print(f"saving {URL} to {pathlib.Path('tempfile')}")
-        service_requestor.download_external_file(URL, self.api_key_manager, fileID, filename=pathlib.Path("tempfile"))
+        filename = service_requestor.download_external_file(URL=URL, API_db_manager=self.api_key_manager, filename=pathlib.Path("tempfile"))
         
         #summarize the file
-        summary = AISummarizerService.summarize_from_external_service(pathlib.Path("tempfile"))
+        summary = AISummarizerService.summarize_from_external_service(filename)
         
         #save the summary
-        self.file_database.update_file_summary(fileID, summary=summary, folderID=folderID)
+        self.file_database.update_file_summary(fileID, summary=summary)
     

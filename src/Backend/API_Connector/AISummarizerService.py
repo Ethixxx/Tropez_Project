@@ -1,10 +1,9 @@
-import openai
+from openai import OpenAI
 import requests
 import os
 import fitz  # PyMuPDF
 from docx import Document
 import pathlib
-
 
 class AISummarizerService: 
     @staticmethod       
@@ -19,7 +18,11 @@ class AISummarizerService:
 
         try:
             content = AISummarizerService.read_file_contents(filename)
+            if content:
+                print(f"Successfully read content from {filename}")
+                content = AISummarizerService.summarize_content(content)
             os.remove(filename)  # Cleanup the temp file after reading
+            return content
         except Exception as e:
             print(f"could not read downloaded file: {e}")
 
@@ -27,7 +30,7 @@ class AISummarizerService:
 
     @staticmethod
     def read_file_contents(filepath):
-        ext = os.path.splitext(filepath)[1].lower()
+        ext = os.path.splitext(filepath)[-1].lower()
 
         try:
             if ext == ".txt":
@@ -62,21 +65,20 @@ class AISummarizerService:
     @staticmethod
     def summarize_content(content):
         prompt = (
-            "Summarize the following file content in exactly 2 sentences. "
-            "Be concise and informative, and do not exceed 2 sentences total.\n\n"
             f"{content[:4000]}"
         )
 
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
         try:
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that summarizes uploaded documents."},
-                    {"role": "user", "content": prompt}
-                ],
+                    {"role": "system", "content": "You are an assistant that generates searchable captions for documents. The filename will be stored and searched seperately. The response must be consice because it must fit on a small screen do not exceed 2 sentences total. Do not include headers or descriptors \n\n"},
+                    {"role": "user", "content": prompt}],
                 temperature=0.5
             )
-            return response['choices'][0]['message']['content'].strip()
+            return response.choices[0].message.content
         
         except Exception as e:
             print(f"\nFULL OpenAI ERROR:\n{e}\n")

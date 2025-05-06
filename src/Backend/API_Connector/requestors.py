@@ -207,7 +207,7 @@ class GoogleDriveRequestor(APIRequestor):
             #ask google if the file is accessible
             try:
                 response = cls.googleOAuth.get(
-                    f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true",
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true&fields=id,size,name",
                     headers={
                         'Authorization': f'Bearer {accessToken}'
                     }
@@ -215,7 +215,7 @@ class GoogleDriveRequestor(APIRequestor):
                 
                 if response.status_code == 200:
                     #if the file is accessible, return True
-                    return (key[0], response.json())
+                    return (accessToken, response.json())
             except Exception as e:
                 # Log or handle the exception as needed
                 print(f"An error occurred: {e}")
@@ -223,63 +223,32 @@ class GoogleDriveRequestor(APIRequestor):
         return None
     
     @classmethod
-    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str, filename: Path):
-        #get the hostname of the url
-        parsed_url = parse.urlparse(URL).netloc
-        if not parsed_url or len(parsed_url.split('.')) < 2:
-            raise ValueError("Invalid URL")
-        
-        #get the top level domain (www.drive.google.com -> google.com)
-        parsed_url = ".".join(parsed_url.split('.')[-2:])
-
-        #check if the URL is a file link
-        if "/d/" not in URL or parsed_url.lower() != "google.com":
-            return False
-        
-        #get the file id
-        file_id = URL.split("/d/")[1].split("/")[0]
-        
-        if(isinstance(account, str)):
-            key = API_db_manager.retrieve_id_with_account_and_service(account, "Google Drive")
-            
-        #generate an access token
-        accessToken = cls.googleOAuth.refresh_token(
-                            token_url='https://oauth2.googleapis.com/token',
-                            refresh_token=key[1],
-                            client_id=cls.client_ID,
-                            client_secret=cls.client_secret
-                        )
-        
+    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, filename: Path):
+        response = cls.check_access(URL, API_db_manager)
         
         #ask google if the file is accessible
         try:
-            response = cls.googleOAuth.get(
-                f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true",
-                headers={
-                    'Authorization': f'Bearer {accessToken}'
-                }
-            )
-            
-            if response.status_code == 200:
-                #if the file is accessible, download it 
-                file_metadata = response.json()
-                file_size = file_metadata.get("size", 0)
+            if response:
+                file_size = response[1].get("size", 0)
                 
                 #dont download more than 512 MB
-                if(file_size > 512 * 1024 * 1024):
+                if(int(file_size) > 512 * 1024 * 1024):
                     raise ValueError("File is too large to summarize")
                 else:
                     download_response = cls.googleOAuth.get(
-                        f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
+                        f"https://www.googleapis.com/drive/v3/files/{response[1].get('id')}?alt=media",
                         headers={
-                            'Authorization': f'Bearer {accessToken}'
+                            'Authorization': f'Bearer {response[0]}'
                         },
                         stream=True
                     )
                     
+                    extension = response[1].get('name').split('.')[-1]
+                    filename = filename.with_suffix(f".{extension}")
                     if download_response.status_code == 200:
                         #save the file to a temporary location
                         with open(filename, "wb") as temp_file:
+                            print(f"saving {URL} to {filename}")
                             for chunk in download_response.iter_content(chunk_size=8192):
                                 temp_file.write(chunk)
                         
