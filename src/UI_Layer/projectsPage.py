@@ -75,6 +75,7 @@ class projects_page_base(tk.Frame):
             self.delete_button.grid(row=4, column=1, sticky="nsww", padx='5p', pady='5p')
 
             #create the back button
+            #create the back button
             self.back_button = ttk.Button(self, text="Back", command=self.go_back, state="disabled")
             self.back_button.grid(pady=5, row=4, column=0)
             
