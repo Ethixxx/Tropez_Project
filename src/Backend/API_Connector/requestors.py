@@ -391,7 +391,7 @@ class oneDriveRequestor(APIRequestor):
 
                 response = oneDriveOAuth.get(share_endpoint)
                 if response.status_code == 200:
-                    return (key[0], response.json())
+                    return (token, response.json())
             except Exception as e:
                 print(f"Shared link access failed: {e}")
 
@@ -408,7 +408,7 @@ class oneDriveRequestor(APIRequestor):
 
                 response = oneDriveOAuth.get(endpoint)
                 if response.status_code == 200:
-                    return (key[0], response.json())
+                    return (token, response.json())
                 else:
                     print(f"Fallback access failed: {response.status_code} - {response.text}")
             except Exception as e:
@@ -417,24 +417,25 @@ class oneDriveRequestor(APIRequestor):
         return None
 
     @classmethod
-    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str | None, filename: Path):
+    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, filename: Path):
         response = cls.check_access(URL, API_db_manager)
 
         try:
             if response:
                 file_metadata = response[1]
+                token = response[0].get('access_token')
                 file_id = file_metadata.get("id")
                 file_name = file_metadata.get("name")
                 file_type = file_metadata.get("file", {}).get("mimeType", "unknown")
                 print(f"Attempting to download {file_name} with detected type: {file_type}")
 
                 # Check if the file is a PowerPoint file
-                if file_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+                if file_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
                     # Export PowerPoint file as PDF
                     download_response = cls.oneDriveOAuth.get(
                         f"https://graph.microsoft.com/v1.0/me/drive/items/{file_id}/content?format=pdf",
                         headers={
-                            'Authorization': f'Bearer {response[0]}'
+                            'Authorization': f'Bearer {token}'
                         },
                         stream=True
                     )
@@ -444,7 +445,7 @@ class oneDriveRequestor(APIRequestor):
                     download_response = cls.oneDriveOAuth.get(
                         f"https://graph.microsoft.com/v1.0/me/drive/items/{file_id}/content",
                         headers={
-                            'Authorization': f'Bearer {response[0]}'
+                            'Authorization': f'Bearer {token}'
                         },
                         stream=True
                     )
