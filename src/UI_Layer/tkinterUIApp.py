@@ -28,6 +28,7 @@ class MainApp():
         self.root = tk.Tk()
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
+        self.style.configure("Treeview", rowheight=25)
         
         
         self.initialize_main_window(screenName)

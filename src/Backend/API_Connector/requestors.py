@@ -207,7 +207,7 @@ class GoogleDriveRequestor(APIRequestor):
             #ask google if the file is accessible
             try:
                 response = cls.googleOAuth.get(
-                    f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true&fields=id,size,name",
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true&fields=id,size,name,mimeType",
                     headers={
                         'Authorization': f'Bearer {accessToken}'
                     }
@@ -230,21 +230,62 @@ class GoogleDriveRequestor(APIRequestor):
         try:
             if response:
                 file_size = response[1].get("size", 0)
+                file_type = response[1].get("mimeType", "unknown")
+                print(f"attempting to download {response[1].get('name')} with a detected type of {file_type}")
                 
                 #dont download more than 512 MB
                 if(int(file_size) > 512 * 1024 * 1024):
                     raise ValueError("File is too large to summarize")
                 else:
-                    download_response = cls.googleOAuth.get(
-                        f"https://www.googleapis.com/drive/v3/files/{response[1].get('id')}?alt=media",
-                        headers={
-                            'Authorization': f'Bearer {response[0]}'
-                        },
-                        stream=True
-                    )
+                    if(file_type == "application/vnd.google-apps.document"):
+                        download_response = cls.googleOAuth.get(
+                            f"https://docs.google.com/document/d/{response[1].get('id')}/export?format=pdf",
+                            headers={
+                                'Authorization': f'Bearer {response[0]}'
+                            },
+                            stream=True
+                        )
+                        filename = filename.with_suffix(f".pdf")
+                    elif(file_type == "application/vnd.google-apps.spreadsheet"):
+                        download_response = cls.googleOAuth.get(
+                            f"https://docs.google.com/spreadsheets/d/{response[1].get('id')}/export?format=pdf",
+                            headers={
+                                'Authorization': f'Bearer {response[0]}'
+                            },
+                            stream=True
+                        )
+                        filename = filename.with_suffix(f".pdf")
+                    elif(file_type == "application/vnd.google-apps.presentation"):
+                        download_response = cls.googleOAuth.get(
+                            f"https://docs.google.com/presentation/d/{response[1].get('id')}/export/pdf",
+                            headers={
+                                'Authorization': f'Bearer {response[0]}'
+                            },
+                            stream=True
+                        )
+                        filename = filename.with_suffix(f".pdf")
+                    elif(file_type == "application/pdf"):
+                        download_response = cls.googleOAuth.get(
+                            f"https://www.googleapis.com/drive/v3/files/{response[1].get('id')}?alt=media",
+                            headers={
+                                'Authorization': f'Bearer {response[0]}'
+                            },
+                            stream=True
+                        )
+                        filename = filename.with_suffix(f".pdf")
+                    elif(file_type.startswith("text/")):
+                        download_response = cls.googleOAuth.get(
+                            f"https://www.googleapis.com/drive/v3/files/{response[1].get('id')}?alt=media",
+                            headers={
+                                'Authorization': f'Bearer {response[0]}'
+                            },
+                            stream=True
+                        )
+                        filename = filename.with_suffix(f".txt")
+                    else:
+                        raise ValueError("File type not supported for automatic summarizing")
                     
-                    extension = response[1].get('name').split('.')[-1]
-                    filename = filename.with_suffix(f".{extension}")
+
                     if download_response.status_code == 200:
                         #save the file to a temporary location
                         with open(filename, "wb") as temp_file:
@@ -258,7 +299,7 @@ class GoogleDriveRequestor(APIRequestor):
                 
         except Exception as e:
             # Log or handle the exception as needed
-            print(f"An error occurred: {e}")
+            print(f"An error occurred while downloading file: {e}")
             
         return None
 
@@ -352,8 +393,9 @@ class oneDriveRequestor(APIRequestor):
             oneDriveOAuth = OAuth2Session(client_id=cls.client_ID)
             
             try:
+                # Check if the URL is a shared link
                 share_id = base64.urlsafe_b64encode(URL.encode()).decode().rstrip("=")
-                share_endpoint = f"https://graph.microsoft.com/v1.0/shares/u!{share_id}/driveItem"
+                share_endpoint = f"https://graph.microsoft.com/v1.0/shares/u!{share_id}/driveItem?select=name,id,file"
 
                 response = oneDriveOAuth.get(share_endpoint, headers={
                     'Authorization': f'Bearer {token}'
@@ -363,16 +405,16 @@ class oneDriveRequestor(APIRequestor):
             except Exception as e:
                 print(f"Shared link access failed: {e}")
 
-            # if not, check if its a file path or ID
+            # If not a shared link, check if it's a file path or ID
             try:
                 path = urlparse(URL).path
                 path = unquote(path.strip("/"))
 
-                # check whether it's a path or a file ID
-                if "/" in path or "." in path:  # likely a path like /Documents/test.pdf
-                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/root:/{path}"
-                else:  # likely an ID
-                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/items/{path}"
+                # Check whether it's a path or a file ID
+                if "/" in path or "." in path:  # Likely a path like /Documents/test.pdf
+                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/root:/{path}?select=name,id,file"
+                else:  # Likely an ID
+                    endpoint = f"https://graph.microsoft.com/v1.0/me/drive/items/{path}?select=name,id,file"
 
                 response = oneDriveOAuth.get(endpoint, headers={
                     'Authorization': f'Bearer {token}'
@@ -383,7 +425,54 @@ class oneDriveRequestor(APIRequestor):
                     print(f"Fallback access failed: {response.status_code} - {response.text}")
             except Exception as e:
                 print(f"Error trying fallback access: {e}")
-            
+
+        return None
+
+    @classmethod
+    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str | None, filename: Path):
+        response = cls.check_access(URL, API_db_manager)
+
+        try:
+            if response:
+                file_metadata = response[1]
+                file_id = file_metadata.get("id")
+                file_name = file_metadata.get("name")
+                file_type = file_metadata.get("file", {}).get("mimeType", "unknown")
+                print(f"Attempting to download {file_name} with detected type: {file_type}")
+
+                # Check if the file is a PowerPoint file
+                if file_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+                    # Export PowerPoint file as PDF
+                    download_response = cls.oneDriveOAuth.get(
+                        f"https://graph.microsoft.com/v1.0/me/drive/items/{file_id}/content?format=pdf",
+                        headers={
+                            'Authorization': f'Bearer {response[0]}'
+                        },
+                        stream=True
+                    )
+                    filename = filename.with_suffix(".pdf")
+                else:
+                    # Default behavior: Download the file as-is
+                    download_response = cls.oneDriveOAuth.get(
+                        f"https://graph.microsoft.com/v1.0/me/drive/items/{file_id}/content",
+                        headers={
+                            'Authorization': f'Bearer {response[0]}'
+                        },
+                        stream=True
+                    )
+
+                # Save the file
+                if download_response.status_code == 200:
+                    with open(filename, "wb") as temp_file:
+                        print(f"Saving {file_name} to {filename}")
+                        for chunk in download_response.iter_content(chunk_size=8192):
+                            temp_file.write(chunk)
+                    return filename
+                else:
+                    raise ValueError(f"Failed to download the file: {download_response.status_code} - {download_response.text}")
+
+        except Exception as e:
+            print(f"An error occurred while downloading the file: {e}")
 
         return None
 

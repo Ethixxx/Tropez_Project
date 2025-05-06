@@ -35,7 +35,7 @@ class projects_page_base(tk.Frame):
             self.search_box.configure(foreground='gray')
             
             #configure the placeholder to automatically appear and disapear
-            self.search_box.bind('<FocusOut>', lambda event: (self.search_box.insert(0, self.PLACEHOLDER), self.search_box.configure(foreground='gray'))  if not self.search_box.get() else None)
+            self.search_box.bind('<FocusOut>', lambda event: self.search_box_refresh())
             self.search_box.bind('<FocusIn>', lambda event: (self.search_box.delete(0, 'end'), self.search_box.configure(foreground='black')) if self.search_box.get() == self.PLACEHOLDER else None)
             
             #create the sort by box
@@ -61,6 +61,10 @@ class projects_page_base(tk.Frame):
             self.grid_rowconfigure(2, weight=1)
             self.tree.bind("<Double-1>", self.on_tree_item_double_click)
             self.tree.bind("<<TreeviewSelect>>", lambda event: self.on_tree_item_select())
+            self.tree.columnconfigure(0, weight=1)
+            self.tree.columnconfigure(1, weight=1)
+            self.tree.columnconfigure(2, weight=0)
+            self.tree.column("Status", anchor='e')
 
             #create a box to show the full file description of the selected file
             ttk.Label(self, text="Description: ", anchor="w", takefocus=False).grid(row=3, column=0, sticky="we", padx='10p')
@@ -74,7 +78,6 @@ class projects_page_base(tk.Frame):
             self.delete_button = ttk.Button(self, text="Delete", command=self.delete_something, state="disabled")
             self.delete_button.grid(row=4, column=1, sticky="nsww", padx='5p', pady='5p')
 
-            #create the back button
             #create the back button
             self.back_button = ttk.Button(self, text="Back", command=self.go_back, state="disabled")
             self.back_button.grid(pady=5, row=4, column=0)
@@ -318,6 +321,8 @@ class projects_page_base(tk.Frame):
                 files = self.fileManager.get_child_files(self.current_folder_id)
                 for file in files:
                     self.tree.insert("", "end", iid=f"file-{file.id}", values=(file.name, file.description, 'File'))
+                
+                self.PLACEHOLDER = "Search for a file..."
             else:
                 # Clear the navigation stack
                 self.navigation_stack = []
@@ -332,6 +337,8 @@ class projects_page_base(tk.Frame):
                 for project in all_projects:
                     self.tree.insert("", "end", iid=f"project-{project.id}", 
                         values=(project.name, project.description, project.status))
+                
+                self.PLACEHOLDER = "Search for a project..."
                 
             #sort the tree    
             sort_by = self.sort_by_box.get()
@@ -348,6 +355,7 @@ class projects_page_base(tk.Frame):
                     
             #update the selected item (now None)
             self.deselect()
+            self.search_box_refresh()
 
 
         def on_tree_item_double_click(self, event):
@@ -378,6 +386,13 @@ class projects_page_base(tk.Frame):
             except Exception as e:
                 print(f"Navigation failed: {e}")
                 
+        def search_box_refresh(self):
+            search_box_text = self.search_box.get().strip()
+            
+            if (not search_box_text) or (search_box_text == "Search for a project...") or (search_box_text == "Search for a file..."):
+                self.search_box.delete(0, 'end')
+                (self.search_box.insert(0, self.PLACEHOLDER), self.search_box.configure(foreground='gray'))
+                    
         def on_tree_item_select(self):
             selected_item = self.tree.focus()
             if not selected_item:
