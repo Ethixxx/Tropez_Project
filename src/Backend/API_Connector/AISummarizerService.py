@@ -5,7 +5,9 @@ import fitz  # PyMuPDF
 from docx import Document
 import pathlib
 
-class AISummarizerService:        
+
+class AISummarizerService: 
+    @staticmethod       
     def summarize_from_external_service(filename: pathlib.Path) -> str:
         """
         Fetch a document from an external service and summarize it in exactly 2 sentences.
@@ -15,14 +17,36 @@ class AISummarizerService:
         :return: A 2-sentence summary.
         """
 
-        content = AISummarizerService.read_file_contents(filename)
-        os.remove(filename)  # Cleanup the temp file after reading
-
-        if "Error reading" in content or content == "Unsupported file format.":
-            return content
+        try:
+            content = AISummarizerService.read_file_contents(filename)
+            os.remove(filename)  # Cleanup the temp file after reading
+        except Exception as e:
+            print(f"could not read downloaded file: {e}")
 
         return AISummarizerService.summarize_content(content)
 
+    @staticmethod
+    def read_file_contents(filepath):
+        ext = os.path.splitext(filepath)[1].lower()
+
+        try:
+            if ext == ".txt":
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    return file.read()
+
+            elif ext == ".pdf":
+                return AISummarizerService.extract_text_from_pdf(filepath)
+
+            elif ext == ".docx":
+                return AISummarizerService.extract_text_from_docx(filepath)
+
+            else:
+                raise ValueError("Unsupported file type. Supported types are: .txt, .pdf, .docx")
+
+        except Exception as e:
+            raise ValueError(f"Error reading file {filepath}: {e}")
+    
+    @staticmethod
     def extract_text_from_pdf(path):
         text = ""
         with fitz.open(path) as doc:
@@ -30,10 +54,12 @@ class AISummarizerService:
                 text += page.get_text()
         return text
 
+    @staticmethod
     def extract_text_from_docx(path):
         doc = Document(path)
         return "\n".join([para.text for para in doc.paragraphs])
 
+    @staticmethod
     def summarize_content(content):
         prompt = (
             "Summarize the following file content in exactly 2 sentences. "

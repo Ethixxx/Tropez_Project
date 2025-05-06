@@ -122,4 +122,7 @@ class FileOrchestrator:
             bool: True if the file was successfully summarized, False otherwise.
         """
         service_requestor = requestors.get_requestor(URL)
+        
+        service_requestor.download_external_file(URL, self.api_key_manager, fileID)
+        
     

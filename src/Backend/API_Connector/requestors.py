@@ -85,7 +85,7 @@ class APIRequestor(ABC):
         pass
     
     @abstractmethod
-    def download_external_file(self, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str | None):
+    def download_external_file(self, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str | None, filename: Path):
         pass
     
     
@@ -222,7 +222,7 @@ class GoogleDriveRequestor(APIRequestor):
         return None
     
     @classmethod
-    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str):
+    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str, filename: Path):
         #get the hostname of the url
         parsed_url = parse.urlparse(URL).netloc
         if not parsed_url or len(parsed_url.split('.')) < 2:
@@ -278,12 +278,11 @@ class GoogleDriveRequestor(APIRequestor):
                     
                     if download_response.status_code == 200:
                         #save the file to a temporary location
-                        temp_file_path = Path("temp_file")
-                        with open(temp_file_path, "wb") as temp_file:
+                        with open(filename, "wb") as temp_file:
                             for chunk in download_response.iter_content(chunk_size=8192):
                                 temp_file.write(chunk)
                         
-                        return temp_file_path
+                        return filename
                     else:
                         raise ValueError("Failed to download the file")
                 
