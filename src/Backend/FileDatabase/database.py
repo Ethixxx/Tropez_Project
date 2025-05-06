@@ -1,8 +1,12 @@
 from typing import NamedTuple
 from sqlalchemy import create_engine, Column, String, Integer, ForeignKey
+from sqlalchemy.types import TypeDecorator, BLOB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from os.path import normpath
+import numpy
+
+import sqlite_vec
 
 
 # Return Types
@@ -72,10 +76,34 @@ class File(FileBase):
     description = Column(String, nullable=True)
     folder_id = Column(Integer, ForeignKey('folders.id'), nullable=False, index=True)
     folder = relationship('Folder', back_populates='files', foreign_keys=folder_id)
+    embeddings = relationship('embeddings', back_populates='file', foreign_keys='embeddings.file_id')
+    
+class Vector(TypeDecorator):
+    impl = BLOB
+
+    def process_bind_param(self, value, dialect):
+        # store vector as binary blob
+        return numpy.array(value, dtype=numpy.float32).tobytes()
+
+    def process_result_value(self, value, dialect):
+        return numpy.frombuffer(value, dtype=numpy.float32)
+class embeddings(FileBase):
+    __tablename__ = 'embeddings'
+    file_id = Column(Integer, ForeignKey('files.id'), nullable=False, index=True, primary_key=True)
+    embedding = Column(Vector, nullable=False)
+    file = relationship('File', back_populates='embeddings', foreign_keys=file_id)
 
 class fileDatabase:
     def __init__(self, db_url='sqlite:///project_explorer.db'):
         self.engine = create_engine(db_url)
+        
+        #load the vector extension library :D
+        self.engine.raw_connection().enable_load_extension(True)
+        sqlite_vec.load(self.engine.raw_connection())
+        self.engine.raw_connection().enable_load_extension(False)
+        print("vector extension library loaded")
+        
+        #create the tables if they do not exist
         FileBase.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
         
