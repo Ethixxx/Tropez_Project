@@ -10,10 +10,12 @@ import webbrowser
 from urllib.parse import urlparse
 import os
 from jwt import JWT
-import time
 
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+from urllib import parse
+
 
 #allow the oauth library to use http (subclassed to only allow localhost to use http)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -55,6 +57,7 @@ def start_local_server():
         
         server_started.set()
         redirect_uri = f"http://localhost:{port}/"
+        server.timeout = 30
         server.handle_request()  # handle a single request and exit
         break
         
@@ -71,6 +74,18 @@ class APIRequestor(ABC):
     
     @abstractmethod
     def load_token_with_name(self, key_name: str, API_db_manager: AccountDB.APIKeyManager):
+        pass
+    
+    @abstractmethod
+    def check_access(self, URL: str, API_db_manager: AccountDB.APIKeyManager) -> tuple[str, dict] | None:
+        pass
+    
+    @abstractmethod
+    def get_tokens_by_service(self, API_db_manager: AccountDB.APIKeyManager):
+        pass
+    
+    @abstractmethod
+    def download_external_file(self, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str | None):
         pass
     
     
@@ -134,7 +149,7 @@ class GoogleDriveRequestor(APIRequestor):
         #open the webbrowser for the user to authenticate
         webbrowser.open(authorization_url)
         
-        server_thread.join(30)
+        server_thread.join(20)
         if(authorization_response is None):
             raise ValueError("Authorization response not received. Please try again.")
         
@@ -205,6 +220,78 @@ class GoogleDriveRequestor(APIRequestor):
                 print(f"An error occurred: {e}")
             
         return None
+    
+    @classmethod
+    def download_external_file(cls, URL: str, API_db_manager: AccountDB.APIKeyManager, account: str):
+        #get the hostname of the url
+        parsed_url = parse.urlparse(URL).netloc
+        if not parsed_url or len(parsed_url.split('.')) < 2:
+            raise ValueError("Invalid URL")
+        
+        #get the top level domain (www.drive.google.com -> google.com)
+        parsed_url = ".".join(parsed_url.split('.')[-2:])
+
+        #check if the URL is a file link
+        if "/d/" not in URL or parsed_url.lower() != "google.com":
+            return False
+        
+        #get the file id
+        file_id = URL.split("/d/")[1].split("/")[0]
+        
+        if(isinstance(account, str)):
+            key = API_db_manager.retrieve_id_with_account_and_service(account, "Google Drive")
+            
+        #generate an access token
+        accessToken = cls.googleOAuth.refresh_token(
+                            token_url='https://oauth2.googleapis.com/token',
+                            refresh_token=key[1],
+                            client_id=cls.client_ID,
+                            client_secret=cls.client_secret
+                        )
+        
+        
+        #ask google if the file is accessible
+        try:
+            response = cls.googleOAuth.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true",
+                headers={
+                    'Authorization': f'Bearer {accessToken}'
+                }
+            )
+            
+            if response.status_code == 200:
+                #if the file is accessible, download it 
+                file_metadata = response.json()
+                file_size = file_metadata.get("size", 0)
+                
+                #dont download more than 512 MB
+                if(file_size > 512 * 1024 * 1024):
+                    raise ValueError("File is too large to summarize")
+                else:
+                    download_response = cls.googleOAuth.get(
+                        f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media",
+                        headers={
+                            'Authorization': f'Bearer {accessToken}'
+                        },
+                        stream=True
+                    )
+                    
+                    if download_response.status_code == 200:
+                        #save the file to a temporary location
+                        temp_file_path = Path("temp_file")
+                        with open(temp_file_path, "wb") as temp_file:
+                            for chunk in download_response.iter_content(chunk_size=8192):
+                                temp_file.write(chunk)
+                        
+                        return temp_file_path
+                    else:
+                        raise ValueError("Failed to download the file")
+                
+        except Exception as e:
+            # Log or handle the exception as needed
+            print(f"An error occurred: {e}")
+            
+        return None
 
 class oneDriveRequestor(APIRequestor):
     service_name = "OneDrive"
@@ -268,7 +355,7 @@ class oneDriveRequestor(APIRequestor):
         )
 
         # store the token in the database
-        API_db_manager.store_api_key(key_name, cls.service_name, pickle.dumps(token))
+        API_db_manager.store_api_key(key_name, cls.service_name, token["refresh_token"])
 
     @classmethod
     def check_access(cls, URL: str, API_db_manager: AccountDB.APIKeyManager):
@@ -297,6 +384,33 @@ class oneDriveRequestor(APIRequestor):
         
         return None
 
+def get_requestor(URL: str) -> APIRequestor:
+    """
+    Returns the appropriate requestor class based on the URL.
+    
+    Args:
+        URL (str): The URL to check.
+        
+    Returns:
+        APIRequestor: The appropriate requestor class.
+        
+    Raises:
+        ValueError: If the URL does not match any supported services.
+    """
+    if not isinstance(URL, str):
+        raise TypeError("URL must be a string")
+    
+    parsed_url = parse.urlparse(URL).netloc
+    if not parsed_url or len(parsed_url.split('.')) < 2:
+        raise ValueError("Invalid URL")
+    
+    #get the top level domain (www.drive.google.com -> google.com)
+    parsed_url = ".".join(parsed_url.split('.')[-2:])
+    
+    if parsed_url in supported_services_url:
+        return supported_services_url[parsed_url]
+    
+    raise ValueError("service is not supported yet")
 
 supported_services = {
     'Google Drive': GoogleDriveRequestor,
@@ -305,6 +419,5 @@ supported_services = {
 supported_services_url = {
     'google.com': GoogleDriveRequestor,
     'live.com': oneDriveRequestor,
-    'onedrive.live.com': oneDriveRequestor,
     'microsoft.com': oneDriveRequestor
 }

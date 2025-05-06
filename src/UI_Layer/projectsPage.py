@@ -3,11 +3,13 @@ from tkinter import ttk
 from tkinter import messagebox
 from Backend.FileDatabase.database import fileDatabase
 from Backend.API_Key_Container.AccountDB import APIKeyManager
-from Backend.API_Connector.add_external_file import add_external_file
+from Backend.API_Connector.FileAdder import FileOrchestrator
 
 class projects_page_base(tk.Frame):
         def __init__(self, parent, fileManager: fileDatabase, apiDatabase: APIKeyManager):
             super().__init__(parent)
+            
+            self.threaded_file_adder = FileOrchestrator(apiDatabase, fileManager)
             
             if(type(fileManager) != fileDatabase):
                 raise TypeError("fileManager must be of type fileDatabase")
@@ -179,7 +181,6 @@ class projects_page_base(tk.Frame):
                 try:
                     if item_type == "Project":
                         self.fileManager.create_project(name, desc_entry.get().strip())
-                        self.update_file_tree()
                     elif item_type == "Folder":
                         if self.current_folder_id is None:
                             raise ValueError("You must be inside a project or folder to create a new folder.")
@@ -187,9 +188,9 @@ class projects_page_base(tk.Frame):
                     elif item_type == "File":
                         if self.current_folder_id is None:
                             raise ValueError("You must be inside a folder to create a new file.")
-                        add_external_file(url_entry.get().strip(), self.APIManager, self.fileManager, self.current_folder_id)
-                        self.update_file_tree()
+                        self.threaded_file_adder.queue_add_file(URL=url_entry.get().strip(), folderID=self.current_folder_id, description=desc_entry.get().strip())
                     win.destroy()
+                    self.update_file_tree()
                 except Exception as e:
                     print(f"Error: {e}")
 

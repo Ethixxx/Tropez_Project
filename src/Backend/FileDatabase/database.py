@@ -39,6 +39,7 @@ class FileInfo(NamedTuple):
     id: int
     name: str
     URL: str
+    description: str
 
 
 FileBase = declarative_base()
@@ -68,6 +69,7 @@ class File(FileBase):
     id = Column(Integer, primary_key=True, autoincrement=True)
     URL = Column(String, nullable=False, unique=True)
     name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
     folder_id = Column(Integer, ForeignKey('folders.id'), nullable=False, index=True)
     folder = relationship('Folder', back_populates='files', foreign_keys=folder_id)
 
@@ -299,7 +301,7 @@ class fileDatabase:
         finally:
             session.close()
             
-    def add_file(self, name: str, folder_id: int, url: str):
+    def add_file(self, name: str, folder_id: int, url: str, description: str):
         session = self.Session()
         
         try:
@@ -317,9 +319,11 @@ class fileDatabase:
                 raise ValueError(f"File with URL '{url}' already exists.")
             
             # Create the file and add it to the database
-            new_file = File(name=name, folder=folder, URL=url)
+            new_file = File(name=name, folder=folder, URL=url, description=description)
             session.add(new_file)
             session.commit()
+            
+            return new_file.id
             
         except Exception as e:
             session.rollback()
@@ -344,7 +348,7 @@ class fileDatabase:
             if skip is not None:
                 query = query.offset(skip)
                 
-            return [FileInfo(file.id, file.name, file.URL) for file in query.all()]
+            return [FileInfo(file.id, file.name, file.URL, file.description) for file in query.all()]
             
         except Exception as e:
             raise e
@@ -546,7 +550,7 @@ class fileDatabase:
             if not file:
                 raise ValueError(f"File: '{file_id}' does not exist.")
             
-            return FileInfo(file.id, file.name, file.URL)
+            return FileInfo(file.id, file.name, file.URL, file.description)
             
         except Exception as e:
             raise e
