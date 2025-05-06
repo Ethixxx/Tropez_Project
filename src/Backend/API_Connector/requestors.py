@@ -362,20 +362,11 @@ class oneDriveRequestor(APIRequestor):
             client_id=cls.client_ID
         )
         
-        authorization_response = None
-        
-        #get the user's unique account id
-        account_id = JWT().decode(message=token.get("id_token"), do_verify=False).get("sub")
-        
-        #check if the user already has a key associated with their account
-        existing_key = API_db_manager.retrieve_id_with_account_and_service(account_id, "OneDrive")
-        if existing_key:
-            #if the key already exists, update it
-            API_db_manager.change_api_key(existing_key, token["access_token"])
-            API_db_manager.rename_api_key(existing_key, key_name)
-        else:
-            #if the key does not exist, create it
-            API_db_manager.store_api_key(key_name, account_id, "OneDrive", token["access_token"])
+        account_id = token.get("id_token") or token.get("access_token")
+        if "id_token" in token:
+            account_id = JWT().decode(token["id_token"], do_verify=False).get("sub")
+
+        API_db_manager.store_api_key(key_name, account_id, cls.service_name, pickle.dumps(token))
 
 
     @classmethod
@@ -389,17 +380,16 @@ class oneDriveRequestor(APIRequestor):
             return False
 
         for key in keys:
-            token = key[1]
-            oneDriveOAuth = OAuth2Session(client_id=cls.client_ID)
-            
+            token = pickle.loads(key[1])
+            oneDriveOAuth = SafeOAuth2Session(client_id=cls.client_ID, token=token)
+
+            # check if its a shared link
             try:
                 # Check if the URL is a shared link
                 share_id = base64.urlsafe_b64encode(URL.encode()).decode().rstrip("=")
                 share_endpoint = f"https://graph.microsoft.com/v1.0/shares/u!{share_id}/driveItem?select=name,id,file"
 
-                response = oneDriveOAuth.get(share_endpoint, headers={
-                    'Authorization': f'Bearer {token}'
-                })
+                response = oneDriveOAuth.get(share_endpoint)
                 if response.status_code == 200:
                     return (key[0], response.json())
             except Exception as e:
@@ -416,9 +406,7 @@ class oneDriveRequestor(APIRequestor):
                 else:  # Likely an ID
                     endpoint = f"https://graph.microsoft.com/v1.0/me/drive/items/{path}?select=name,id,file"
 
-                response = oneDriveOAuth.get(endpoint, headers={
-                    'Authorization': f'Bearer {token}'
-                })
+                response = oneDriveOAuth.get(endpoint)
                 if response.status_code == 200:
                     return (key[0], response.json())
                 else:
