@@ -556,6 +556,25 @@ class fileDatabase:
             raise e
         finally:
             session.close()
+            
+    def update_file_summary(self, file_id: int, summary: str):
+        session = self.Session()
+        
+        try:
+            file = session.query(File).filter_by(id=file_id).one_or_none()
+            
+            if not file:
+                raise ValueError(f"File: '{file_id}' does not exist.")
+            
+            # Update the file's summary
+            file.description = summary
+            session.commit()
+            
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
 
 # Example usage

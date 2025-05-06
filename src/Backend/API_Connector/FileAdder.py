@@ -1,6 +1,7 @@
 from Backend.API_Connector import requestors
 from Backend.API_Key_Container.AccountDB import APIKeyManager
 from Backend.FileDatabase.database import fileDatabase
+from Backend.API_Connector.AISummarizerService import AISummarizerService
 
 from urllib import parse
 import enum
@@ -8,6 +9,8 @@ import enum
 import heapq
 
 import threading
+
+import pathlib
 
 class FileOrchestrator:
     def __init__(self, api_key_manager: APIKeyManager, file_database: fileDatabase):
@@ -45,7 +48,7 @@ class FileOrchestrator:
                         self.__summarize_external_file(file.URL, file.folderID, file.fileID)
         
     class FileObject:
-        def __init__(self, functionRequired: int, priority: int, URL: str = None, folderID: int = None, fileID: int = None, description: str = None):
+        def __init__(self, function: int, priority: int, URL: str = None, folderID: int = None, fileID: int = None, description: str = None):
             """
             Initializes a FileObject
             
@@ -57,7 +60,7 @@ class FileOrchestrator:
             self.URL = URL
             self.folderID = folderID
             self.fileID = fileID
-            self.function = functionRequired
+            self.function = function
             self.priority = priority
             self.description = description
         
@@ -100,13 +103,11 @@ class FileOrchestrator:
         if(file):
             #if we can access the file, add it to the database
             fileID = self.file_database.add_file(name=file[1]['name'], folder_id=folderID, url=URL, description=description)
-            if description is None:
+            if not description:
                 file = self.FileObject(fileID=fileID, function=self.FileObject.Functions.GET_SUMMARY, priority=1)
                 
                 heapq.heappush(self.processingQueue, file)
                 self.processing_wakeup.notify()
-            
-        return False
 
     def __summarize_external_file(self, URL: str, folderID: int, fileID: int):
         """
@@ -123,6 +124,12 @@ class FileOrchestrator:
         """
         service_requestor = requestors.get_requestor(URL)
         
-        service_requestor.download_external_file(URL, self.api_key_manager, fileID)
+        print(f"saving {URL} to {pathlib.Path('tempfile')}")
+        service_requestor.download_external_file(URL, self.api_key_manager, fileID, filename=pathlib.Path("tempfile"))
         
+        #summarize the file
+        summary = AISummarizerService.summarize_from_external_service(pathlib.Path("tempfile"))
+        
+        #save the summary
+        self.file_database.update_file_summary(fileID, summary=summary, folderID=folderID)
     
