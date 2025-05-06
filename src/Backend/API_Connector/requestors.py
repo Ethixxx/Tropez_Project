@@ -267,7 +267,7 @@ class oneDriveRequestor(APIRequestor):
     service_hostname = "onedrive.com"
 
     client_ID = r"77225b40-605d-45b7-822b-f8a1530691f6"
-    scope = [r"https://graph.microsoft.com/Files.Read", r"openid"]
+    scope = [r"Files.Read", r"openid"]
     base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
 

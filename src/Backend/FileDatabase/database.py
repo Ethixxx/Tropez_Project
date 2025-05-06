@@ -157,8 +157,36 @@ class fileDatabase:
             if existing_project:
                 raise ValueError(f"Project with name '{new_name}' already exists.")
             
-            if(normpath('(path-to-wiki)/foo/bar.txt').startswith('(path-to-wiki)')):
+            if(normpath(new_name) == new_name):
                 project.name = new_name
+                session.commit()
+            
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+            
+    def rename_folder(self, folder_id: int, new_name: str):
+        session = self.Session()
+        
+        try:
+            # Find the folder
+            if isinstance(folder_id, int):
+                folder = session.query(Folder).filter_by(id=folder).one_or_none()
+            else:
+                raise ValueError("Identifier must be an integer.")
+            
+            if not folder:
+                raise ValueError(f"Folder: '{folder_id}' does not exist.")
+            
+            # Ensure that a folder with the new name is not already present
+            existing_folder = session.query(Folder).filter_by(name=new_name, parent_id=folder.parent_id).one_or_none()
+            if existing_folder:
+                raise ValueError(f"Folder with name '{new_name}' already exists in the parent folder.")
+            
+            if(normpath(new_name) == new_name):
+                folder.name = new_name
                 session.commit()
             
         except Exception as e:

@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinter import messagebox
 from Backend.FileDatabase.database import fileDatabase
 from Backend.API_Key_Container.AccountDB import APIKeyManager
 from Backend.API_Connector.FileAdder import FileOrchestrator
@@ -20,13 +19,14 @@ class projects_page_base(tk.Frame):
             self.fileManager = fileManager
             self.APIManager = apiDatabase
             
+            #create the new (item) button
             self.new_button = ttk.Button(self, text="New", takefocus=False, command=self.new_popup)
-            self.new_button.grid(row=0, column=0, sticky="nswe", padx='10p')
+            self.new_button.grid(row=0, column=0, sticky="nwe", padx='10p')
 
             
             #create the search box
             self.search_box = ttk.Entry(self, takefocus=False)
-            self.search_box.grid(row=0, column=1, sticky="nswe", padx='10p')
+            self.search_box.grid(row=0, column=1, sticky="nwe", padx='10p', columnspan=2)
             self.grid_columnconfigure(index=1, weight=1, minsize='100p')
             
             #configure the placeholder for the search box
@@ -43,29 +43,50 @@ class projects_page_base(tk.Frame):
             self.sort_by_box['values'] = ('Name', 'Status')
             self.sort_by_box.bind("<<ComboboxSelected>>", lambda event: event.widget.selection_clear())
             self.sort_by_box.current(0)
-            self.sort_by_box.grid(row=0, column=2, sticky="nswe", padx='10p')
+            self.sort_by_box.grid(row=0, column=3, sticky="nwe", padx='10p')
             self.grid_columnconfigure(index=2)
+            
+            self.grid_rowconfigure(0, pad='10p', weight=0)
             
             #create the path textbox that spans the columns in row 1
             self.path_textbox = ttk.Label(self, text="Path: ", anchor="w")
-            self.path_textbox.grid(row=1, column=0, columnspan=3, sticky="nswe", padx='10p')
+            self.path_textbox.grid(row=1, column=0, columnspan=4, sticky="nwe", padx='10p')
             
             #create the project tree
             self.tree = ttk.Treeview(self, columns=("Name", "Description", "Status"), show='headings', selectmode='browse', takefocus=True)
             self.tree.heading("Name", text="Name")
             self.tree.heading("Description", text="Description")
             self.tree.heading("Status", text="Status")
-            self.tree.grid(row=2, column=0, columnspan=3, sticky="nswe", padx='10p', pady='10p')
+            self.tree.grid(row=2, column=0, columnspan=4, sticky="nswe", padx='10p', pady='10p')
             self.grid_rowconfigure(2, weight=1)
             self.tree.bind("<Double-1>", self.on_tree_item_double_click)
             self.tree.bind("<<TreeviewSelect>>", lambda event: self.on_tree_item_select())
 
+            #create a box to show the full file description of the selected file
+            ttk.Label(self, text="Description: ", anchor="w", takefocus=False).grid(row=3, column=0, sticky="we", padx='10p')
+            self.description_placeholder = "Select a file to see its description"
+            self.file_description = ttk.Label(self, text=self.description_placeholder, anchor="w", justify="left", takefocus=False, foreground="gray")
+            self.file_description.config(wraplength=self.file_description.winfo_width())
+            self.file_description.bind("<Configure>", lambda event: self.file_description.config(wraplength=self.file_description.winfo_width()))
+            self.file_description.grid(row=3, column=1, columnspan=3, sticky="nswe", padx='5p')
+
+            #create the delete button
             self.delete_button = ttk.Button(self, text="Delete", command=self.delete_something, state="disabled")
-            self.delete_button.grid(row=3, column=1, sticky="nswe", padx='10p', pady='5p')
+            self.delete_button.grid(row=4, column=1, sticky="nsww", padx='5p', pady='5p')
 
+            #create the back button
             self.back_button = ttk.Button(self, text="Back", command=self.go_back, state="disabled")
-            self.back_button.grid(pady=5, row=3, column=0)
-
+            self.back_button.grid(pady=5, row=4, column=0)
+            
+            #create the rename button and input field
+            self.rename_button = ttk.Button(self, text="Rename", command=self.rename_something, state="disabled")
+            self.rename_button.grid(row=4, column=2, sticky="nsew", padx='10p', pady='5p')
+            self.rename_entry = ttk.Entry(self, takefocus=False)
+            self.rename_entry.grid(row=4, column=3, columnspan=2, sticky="nswe", padx='10p', pady='5p')
+            
+            
+            #make sure that it is possible to deselect files as expected
+            self.tree.bind("<Button-1>", lambda event: self.check_deselect(event))
             
             self.current_project_id = None
             self.current_folder_id = None
@@ -85,7 +106,7 @@ class projects_page_base(tk.Frame):
                 self.current_folder_id = None
                 self.navigation_stack = []
                 self.update_file_tree()
-                self.on_tree_item_select()
+                
                 self.back_button.config(state="disabled")
             
         
@@ -141,6 +162,29 @@ class projects_page_base(tk.Frame):
                         self.update_file_tree()
                 except:
                     print("File not found")
+                    
+        def rename_something(self):
+            selected_item = self.tree.focus()
+            if not selected_item:
+                return None
+            
+            id = int(selected_item.split("-")[1])
+            if selected_item.startswith("project-"):
+                try:
+                    if(id):
+                        self.fileManager.rename_project(id, self.rename_entry.get())
+                        self.update_file_tree()
+                except:
+                    print("Project not found")
+            elif selected_item.startswith("folder-"):
+                try:
+                    if(id):
+                        self.fileManager.rename_folder(id, self.rename_entry.get())
+                        self.update_file_tree()
+                except:
+                    print("Folder not found")
+                    
+            self.rename_entry.delete(0, 'end')
 
         def new_popup(self):
             win = tk.Toplevel(self)
@@ -302,8 +346,7 @@ class projects_page_base(tk.Frame):
                     self.tree.move(item_id, "", index)
                     
             #update the selected item (now None)
-            self.delete_button.config(state="disabled")
-            self.delete_button.config(text="Delete")
+            self.deselect()
 
 
         def on_tree_item_double_click(self, event):
@@ -337,8 +380,9 @@ class projects_page_base(tk.Frame):
         def on_tree_item_select(self):
             selected_item = self.tree.focus()
             if not selected_item:
-                return
-
+                selected_item = "reset-0"
+                
+                
             print("Selected item:", selected_item)
             parts = selected_item.split("-")
             if len(parts) != 2:
@@ -351,15 +395,51 @@ class projects_page_base(tk.Frame):
             if item_type == "project":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete Project")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
+                
+                self.rename_button.config(state="normal")
+                self.rename_button.config(text="Rename Project")
             elif item_type == "folder":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete Folder")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
+                
+                self.rename_button.config(state="normal")
+                self.rename_button.config(text="Rename Folder")
             elif item_type == "file":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete File")
+                
+                self.file_description.config(text=self.fileManager.get_file(item_id).description, foreground="black")
+                
+                self.rename_button.config(state="disabled")
+                self.rename_button.config(text="Rename")
             else:
                 self.delete_button.config(state="disabled")
                 self.delete_button.config(text="Delete")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
+                
+                self.rename_button.config(state="disabled")
+                self.rename_button.config(text="Rename")
+                
+        def check_deselect(self, event):
+            #check if the coordinates of the click were not on a file in the tree
+            x, y = event.x, event.y
+            item = self.tree.identify_row(y)
+            
+            if item:
+                # If the click was on a tree item, do nothing
+                return
+            
+            # Otherwise, deselect the tree item
+            self.deselect()
+            
         
         def deselect(self):
-            self.focus_set()
+            # Deselect the currently selected item in the treeview
+            self.tree.selection_remove(self.tree.selection())
+            self.tree.focus('')
+            self.on_tree_item_select()

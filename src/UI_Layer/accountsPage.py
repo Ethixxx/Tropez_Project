@@ -44,9 +44,44 @@ class accounts_page_base(tk.Frame):
         self.tree.heading("Service", text="Service")
         self.tree.grid(row=1, column=0, columnspan=3, sticky="nswe", padx='10p', pady='10p')
         self.grid_rowconfigure(1, weight=1)
+        self.tree.bind("<<TreeviewSelect>>", lambda event: (self.delete_key_button.configure(state="normal"), self.rename_key_button.configure(state="normal")) if self.tree.selection() else (self.delete_key_button.configure(state="disabled"), self.rename_key_button.configure(state="disabled")))
         
         # Load data
         self.load_accounts()
+        
+        #delete key button
+        self.delete_key_button = ttk.Button(self, text="Delete", takefocus=False, command=self.delete_key, state="disabled")
+        self.delete_key_button.grid(row=2, column=0, sticky="nswe", padx='10p')
+        
+        #rename key button and textbox
+        self.rename_key_button = ttk.Button(self, text="Rename", takefocus=False, command=self.rename_key, state="disabled")
+        self.rename_key_button.grid(row=2, column=1, sticky="nswe", padx='10p')
+        
+        self.rename_key_entry = ttk.Entry(self, takefocus=False)
+        self.search_box.bind('<FocusOut>', lambda event: (self.search_box.insert(0, "rename a key to..."), self.search_box.configure(foreground='gray')) if not self.search_box.get() else None)
+        self.search_box.bind('<FocusIn>', lambda event: (self.search_box.delete(0, 'end'), self.search_box.configure(foreground='black')) if self.search_box.get() == self.PLACEHOLDER else None)
+        self.rename_key_entry.grid(row=2, column=2, sticky="nswe", padx='10p')
+
+    def delete_key(self):
+        selected_item = self.tree.selection()
+        if selected_item:
+            item_id = self.tree.item(selected_item, "values")[0]
+            self.manager.delete_api_key(item_id)
+            self.load_accounts()
+            
+    def rename_key(self):
+        selected_item = self.tree.selection()
+        if selected_item:
+            item_id = self.tree.item(selected_item, "values")[0]
+            new_name = self.rename_key_entry.get()
+            if new_name.strip() and new_name.strip() != "rename a key to...":
+                self.manager.rename_api_key(item_id, new_name)
+                self.load_accounts()
+            else:
+                # Highlight the entry in red
+                self.rename_key_entry.configure(foreground='red')
+                self.rename_key_entry.focus_set()
+        
 
     def load_accounts(self):
         # Clear current tree

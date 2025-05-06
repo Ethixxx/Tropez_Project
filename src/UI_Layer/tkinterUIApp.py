@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 import ctypes
 
-from PIL import Image, ImageTk, ImageOps
+from PIL import Image, ImageTk, ImageColor
 import pathlib
 
 # Enable DPI awareness for better scaling on Windows
@@ -25,13 +25,19 @@ class MainApp():
         self.APIKeyStore = APIKeyManager(db_url="sqlite:///api_keys.db")
         self.fileStore = fileDatabase(db_url="sqlite:///file_database.db")
         
+        self.root = tk.Tk()
+        self.style = ttk.Style(self.root)
+        self.style.theme_use('clam')
+        
+        
         self.initialize_main_window(screenName)
         self.initialize_main_pages()
         self.initialize_side_bar()
         
+        
+        
     #function initialzies the main window and associated settings
     def initialize_main_window(self, windowTitle: str):
-        self.root = tk.Tk()
         self.root.resizable(width=1, height=1)
         self.root.minsize(width=500, height=500)
         self.root.geometry("1000x500")
@@ -60,17 +66,29 @@ class MainApp():
         
         #create the top aligned buttons
         icon_directory = pathlib.Path(__file__).parent / "Icons" / "png"
+        background_color = self.style.lookup(self.sidebar.winfo_class(), 'background')
+        try:
+            background_color_rgb = ImageColor.getrgb(background_color)
+        except:
+            background_color_rgb = ImageColor.getrgb("white")
+            background_color = "white"
         
-        self.projects_icon = ImageTk.PhotoImage(Image.open(icon_directory / r"folders-office-line-2-0.5x.png").resize((button_icon_dimensions, button_icon_dimensions)))
-        self.projects_button = tk.Button(self.top_sidebar_menu, image=self.projects_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.projects_page))
+        uncomposited_icon = Image.open(icon_directory / r"folders-office-line-2-0.5x.png").convert("RGBA").resize((button_icon_dimensions, button_icon_dimensions))
+        background = Image.new("RGBA", uncomposited_icon.size, background_color_rgb + (255,))
+        self.projects_icon = ImageTk.PhotoImage(Image.alpha_composite(background, uncomposited_icon).convert("RGB"))
+        self.projects_button = tk.Button(self.top_sidebar_menu, image=self.projects_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.projects_page), background=background_color)
         self.projects_button.pack(side="top", pady=(button_height_padding, button_width_padding), fill="x")
         
-        self.settings_icon = ImageTk.PhotoImage(Image.open(icon_directory / r"settings-office-line-2-0.5x.png").resize((button_icon_dimensions, button_icon_dimensions)))
-        self.settings_button = tk.Button(self.top_sidebar_menu, image=self.settings_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.settings_page))
+        uncomposited_icon = Image.open(icon_directory / r"settings-office-line-2-0.5x.png").convert("RGBA").resize((button_icon_dimensions, button_icon_dimensions))
+        background = Image.new("RGBA", uncomposited_icon.size, background_color_rgb + (255,))
+        self.settings_icon = ImageTk.PhotoImage(Image.alpha_composite(background, uncomposited_icon).convert("RGB"))
+        self.settings_button = tk.Button(self.top_sidebar_menu, image=self.settings_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.settings_page), background=background_color)
         self.settings_button.pack(side="bottom", pady=(button_height_padding, button_width_padding), fill="x")
         
-        self.accounts_icon = ImageTk.PhotoImage(Image.open(icon_directory / r"accounts-office-line-2-0.5x.png").resize((button_icon_dimensions, button_icon_dimensions)))
-        self.accounts_button = tk.Button(self.top_sidebar_menu, image=self.accounts_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.accounts_page))
+        uncomposited_icon = Image.open(icon_directory / r"accounts-office-line-2-0.5x.png").convert("RGBA").resize((button_icon_dimensions, button_icon_dimensions))
+        background = Image.new("RGBA", uncomposited_icon.size, background_color_rgb + (255,))
+        self.accounts_icon = ImageTk.PhotoImage(Image.alpha_composite(background, uncomposited_icon).convert("RGB"))
+        self.accounts_button = tk.Button(self.top_sidebar_menu, image=self.accounts_icon, width=sidebar_width, takefocus=False, bd=0, command=lambda: self.change_main_page(self.accounts_page), background=background_color)
         self.accounts_button.pack(side="bottom", pady=(button_height_padding, button_width_padding), fill="x")
         
     
@@ -103,11 +121,10 @@ class MainApp():
         self.projects_page.grid_propagate(False)
         
         self.current_page = self.projects_page
-        self.change_main_page(self.projects_page)
+        self.change_main_page(self.projects_page) 
         
         
     def change_main_page(self, new_page):
-        
         #tell the current page it has been deselected
         if(self.current_page != new_page):
             self.current_page.deselect()
