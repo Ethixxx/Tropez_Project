@@ -103,11 +103,10 @@ class projects_page_base(tk.Frame):
             if not selected_item:
                 return None
 
-            project_values = self.tree.item(selected_item, 'values')
-            if not project_values:
-                return None
-
-            return int(project_values[0])  # project ID
+            if selected_item.startswith("project-"):
+                return int(selected_item.split("-")[1])
+    
+            return None
 
 
         def delete_project(self):
