@@ -9,11 +9,9 @@ class AISummarizerService:
     @staticmethod       
     def summarize_from_external_service(filename: pathlib.Path) -> str:
         """
-        Fetch a document from an external service and summarize it in exactly 2 sentences.
-        
-        :param service_name: The name of the service (e.g., 'direct_url', 'github', 'dropbox').
-        :param link: The direct link to the file.
-        :return: A 2-sentence summary.
+        Summarizes the content of a file downloaded from an external service.
+        Args:
+            filename (pathlib.Path): The path to the downloaded file.
         """
 
         try:
@@ -65,7 +63,7 @@ class AISummarizerService:
     @staticmethod
     def summarize_content(content):
         prompt = (
-            f"{content[:4000]}"
+            f"Summarize:   {content[:4000]}"
         )
 
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -74,7 +72,7 @@ class AISummarizerService:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are an assistant that generates searchable captions for documents. The filename will be stored and searched seperately. The response must be consice because it must fit on a small screen do not exceed 2 sentences total. Do not include headers or descriptors \n\n"},
+                    {"role": "system", "content": "You are an assistant that generates searchable captions for documents. The response must fit on a small screen so you do not exceed 2 sentences total. The filename is stored and searched seperately and the response will be directly shown, so you don't include headers or descriptors \n\n"},
                     {"role": "user", "content": prompt}],
                 temperature=0.5
             )

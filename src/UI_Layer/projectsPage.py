@@ -60,12 +60,24 @@ class projects_page_base(tk.Frame):
             self.tree.bind("<Double-1>", self.on_tree_item_double_click)
             self.tree.bind("<<TreeviewSelect>>", lambda event: self.on_tree_item_select())
 
+            #create a box to show the file description larger
+            ttk.Label(self, text="Description: ", anchor="w", takefocus=False).grid(row=3, column=0, sticky="nswe", padx='10p')
+            self.description_placeholder = "Select a file to see its description"
+            self.file_description = ttk.Label(self, text=self.description_placeholder, anchor="w", justify="left", takefocus=False, foreground="gray")
+            self.file_description.config(wraplength=self.file_description.winfo_width())
+            self.file_description.bind("<Configure>", lambda event: self.file_description.config(wraplength=self.file_description.winfo_width()))
+            self.file_description.grid(row=3, column=1, columnspan=2, sticky="nswe", padx='10p')
+
+            #create the delete button
             self.delete_button = ttk.Button(self, text="Delete", command=self.delete_something, state="disabled")
-            self.delete_button.grid(row=3, column=1, sticky="nswe", padx='10p', pady='5p')
+            self.delete_button.grid(row=4, column=1, sticky="nsw", padx='10p', pady='5p')
 
+            #create the back button
             self.back_button = ttk.Button(self, text="Back", command=self.go_back, state="disabled")
-            self.back_button.grid(pady=5, row=3, column=0)
-
+            self.back_button.grid(pady=5, row=4, column=0)
+            
+            #make sure that it is possible to deselect files as expected
+            self.tree.bind("<Button-1>", lambda event: self.check_deselect(event))
             
             self.current_project_id = None
             self.current_folder_id = None
@@ -85,7 +97,7 @@ class projects_page_base(tk.Frame):
                 self.current_folder_id = None
                 self.navigation_stack = []
                 self.update_file_tree()
-                self.on_tree_item_select()
+                
                 self.back_button.config(state="disabled")
             
         
@@ -337,8 +349,9 @@ class projects_page_base(tk.Frame):
         def on_tree_item_select(self):
             selected_item = self.tree.focus()
             if not selected_item:
-                return
-
+                selected_item = "rest-0"
+                
+                
             print("Selected item:", selected_item)
             parts = selected_item.split("-")
             if len(parts) != 2:
@@ -351,15 +364,41 @@ class projects_page_base(tk.Frame):
             if item_type == "project":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete Project")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
             elif item_type == "folder":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete Folder")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
             elif item_type == "file":
                 self.delete_button.config(state="normal")
                 self.delete_button.config(text="Delete File")
+                
+                self.file_description.config(text=self.fileManager.get_file(item_id).description, foreground="black")
             else:
                 self.delete_button.config(state="disabled")
                 self.delete_button.config(text="Delete")
+                
+                self.file_description.config(text=self.description_placeholder, foreground="gray")
+                
+        def check_deselect(self, event):
+            #check if the coordinates of the click were not on a file in the tree
+            x, y = event.x, event.y
+            item = self.tree.identify_row(y)
+            
+            if item:
+                # If the click was on a tree item, do nothing
+                return
+            
+            # Otherwise, deselect the tree item
+            self.deselect()
+            self.delete_button.config(state="disabled")
+            self.delete_button.config(text="Delete")
+            
+            self.file_description.config(text=self.description_placeholder, foreground="gray")
+            
         
         def deselect(self):
-            self.focus_set()
+            # Deselect the currently selected item in the treeview
+            self.tree.selection_remove(self.tree.selection())
