@@ -45,7 +45,12 @@ class APIKeyManager:
 
     #this method is used to securely encrypt and store new api keys
     def store_api_key(self, name, account, service, api_key):
-        encrypted_data = self.encryptor.encrypt_with_auth(api_key.encode(), self.master_key)
+        if isinstance(api_key, str):
+            api_key_bytes = api_key.encode()
+        else:
+            api_key_bytes = api_key  # already bytes
+
+        encrypted_data = self.encryptor.encrypt_with_auth(api_key_bytes, self.master_key)
         if encrypted_data:
             session = self.Session()
             

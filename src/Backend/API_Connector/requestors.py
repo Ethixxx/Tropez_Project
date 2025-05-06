@@ -15,6 +15,7 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from urllib import parse
+from urllib.parse import unquote
 import base64
 
 #allow the oauth library to use http (subclassed to only allow localhost to use http)
@@ -297,7 +298,7 @@ class oneDriveRequestor(APIRequestor):
     service_hostname = "onedrive.com"
 
     client_ID = r"77225b40-605d-45b7-822b-f8a1530691f6"
-    scope = r"https://graph.microsoft.com/Files.Read"
+    scope = [r"https://graph.microsoft.com/Files.Read", r"openid"]
     base_authorization_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
     token_url = r"https://login.microsoftonline.com/common/oauth2/v2.0/token"
 
@@ -350,13 +351,21 @@ class oneDriveRequestor(APIRequestor):
             include_client_id=True,
             client_id=cls.client_ID
         )
-
-        me_response = cls.oneDriveOAuth.get("https://graph.microsoft.com/v1.0/me")
-        if me_response.status_code != 200:
-            raise ValueError("Failed to fetch user info for token association.")
-        account_id = me_response.json()["id"]
-
-        API_db_manager.store_api_key(key_name, account_id, cls.service_name, pickle.dumps(token))
+        
+        authorization_response = None
+        
+        #get the user's unique account id
+        account_id = JWT().decode(message=token.get("id_token"), do_verify=False).get("sub")
+        
+        #check if the user already has a key associated with their account
+        existing_key = API_db_manager.retrieve_id_with_account_and_service(account_id, "OneDrive")
+        if existing_key:
+            #if the key already exists, update it
+            API_db_manager.change_api_key(existing_key, token["access_token"])
+            API_db_manager.rename_api_key(existing_key, key_name)
+        else:
+            #if the key does not exist, create it
+            API_db_manager.store_api_key(key_name, account_id, "OneDrive", token["access_token"])
 
 
     @classmethod
@@ -370,15 +379,16 @@ class oneDriveRequestor(APIRequestor):
             return False
 
         for key in keys:
-            token = pickle.loads(key[1])
-            oneDriveOAuth = SafeOAuth2Session(client_id=cls.client_ID, token=token)
-
-            # check if its a shared link
+            token = key[1]
+            oneDriveOAuth = OAuth2Session(client_id=cls.client_ID)
+            
             try:
                 share_id = base64.urlsafe_b64encode(URL.encode()).decode().rstrip("=")
                 share_endpoint = f"https://graph.microsoft.com/v1.0/shares/u!{share_id}/driveItem"
 
-                response = oneDriveOAuth.get(share_endpoint)
+                response = oneDriveOAuth.get(share_endpoint, headers={
+                    'Authorization': f'Bearer {token}'
+                })
                 if response.status_code == 200:
                     return (key[0], response.json())
             except Exception as e:
@@ -395,13 +405,16 @@ class oneDriveRequestor(APIRequestor):
                 else:  # likely an ID
                     endpoint = f"https://graph.microsoft.com/v1.0/me/drive/items/{path}"
 
-                response = oneDriveOAuth.get(endpoint)
+                response = oneDriveOAuth.get(endpoint, headers={
+                    'Authorization': f'Bearer {token}'
+                })
                 if response.status_code == 200:
                     return (key[0], response.json())
                 else:
                     print(f"Fallback access failed: {response.status_code} - {response.text}")
             except Exception as e:
                 print(f"Error trying fallback access: {e}")
+            
 
         return None
 
